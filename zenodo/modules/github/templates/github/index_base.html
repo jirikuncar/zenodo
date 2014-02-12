@@ -67,9 +67,9 @@ $(document).ready(function() {
       
       {% for repo in repos %}
       <dl class="dl-horizontal">
-        <dt>{{repo}}</dt>
+        <dt>{{repo.name}}</dt>
         <dd>
-          <input type="checkbox" data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo}}">
+          <input type="checkbox" {{ 'checked' if repo.hook }} data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo.name}}">
         </dd>
       </dl>
       {% endfor %}

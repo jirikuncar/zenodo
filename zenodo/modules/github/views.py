@@ -114,7 +114,13 @@ def connected(resp):
         # Get repo data
         resp = remote.get("users/%(username)s/repos" % {"username": github_login})
         repos = resp.data
-        def get_repo_name(repo): return repo["name"]
+        
+        # def get_repo_hooks(repo):
+        #     name = repo["name"]
+        #     resp = remote.get("repos/%(owner)s/%(repo)s/hooks" % {"owner": github_login, "repo": name})
+        #     return {"name": name, "hooks": resp.data}
+        # repos = map(get_repo_hooks, repos)
+        def get_repo_name(repo): return {"name": repo["name"], "hook": False}
         repos = map(get_repo_name, repos)
         
         # Put user's GitHub info in database
