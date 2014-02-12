@@ -99,6 +99,8 @@ def connected(resp):
     
     # Store the access token on the session
     token = resp['access_token']
+    print "TOKEN", resp['access_token']
+    
     session['github_token'] = (token, '')
     
     # Check if the user has previously created a GitHub OAuth token
@@ -125,7 +127,7 @@ def connected(resp):
         db.session.add(o)
     else:
         # User has previously connected to the GitHub client. Update the token.
-        user.access_token = token[0]
+        user.access_token = token
         github_login = user.extra_data['login']
     
     db.session.commit()
@@ -141,6 +143,7 @@ def create_github_hook(repo):
     # TODO: Check that we have github_login on session
     
     endpoint = "repos/%(owner)s/%(repo)s/hooks" % {"owner": session["github_login"], "repo": repo}
+    print endpoint
     data = {
         "name": "web",
         "config": {
