@@ -59,19 +59,15 @@ def index():
     # Check if user has already authorized GitHub
     user = OAuthTokens.query.filter_by( user_id = current_user.get_id() ).filter_by( client_id = remote.consumer_key ).first()
     
-    if user is None:
-        # Render the connect to GitHub button
-        pass
-    else:
-        # The user has been previously authenticated. Check if the token is still valid.
+    if user is not None:
         
+        # The user has previously been authenticated. Check if the token is still valid.
         # GitHub requires the use of Basic Auth to query token validity. Valid responses return 200.
         endpoint = "https://api.github.com/applications/%(client_id)s/tokens/%(access_token)s" % {"client_id": remote.consumer_key, "access_token": user.access_token}
         r = requests.get(endpoint, auth=(remote.consumer_key, remote.consumer_secret))
         
-        if r.status_code == 200:
-            # The user is authenticated and the token is still valid. Render GitHub setting page.
-            
+        if r.status_code is 200:
+            # The user is authenticated and the token we have is still valid. Render GitHub setting page.
             extra_data = user.extra_data
             
             # Add information to session
@@ -79,19 +75,8 @@ def index():
             session["github_login"] = extra_data['login']
             
             context["connected"] = True
-        else:
-            # The token is no longer valid. Render the connect to GitHub button
-            pass
-    
-    # Check if user is authenticated with GitHub
-    if "github_token" in session:
-        
-        # Get list of user's GitHub repositories
-        endpoint = "users/%(username)s/repos" % {"username": session["github_login"]}
-        resp = remote.get(endpoint)
-        
-        context["repos"] = resp.data
-        context["name"] = session["github_login"]
+            context["repos"] = extra_data['repos']
+            context["name"] = extra_data['login']
     
     return render_template("github/index.html", **context)
 
@@ -112,28 +97,36 @@ def connected(resp):
             request.args['error_description']
         )
     
-    # Store the access token on the session and database
+    # Store the access token on the session
     token = resp['access_token']
     session['github_token'] = (token, '')
     
     # Check if the user has previously created a GitHub OAuth token
-    results = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
-    if results is None:
+    user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
+    if user is None:
         
-        # No record of the user yet
+        # Get user data
         resp = remote.get('user')
         github_login = resp.data['login']
         
+        # Get repo data
+        resp = remote.get("users/%(username)s/repos" % {"username": github_login})
+        repos = resp.data
+        def get_repo_name(repo): return repo["name"]
+        repos = map(get_repo_name, repos)
+        
+        # Put user's GitHub info in database
         o = OAuthTokens(
             client_id = remote.consumer_key,
             user_id = current_user.get_id(),
             access_token = token,
-            extra_data = {"login": github_login}
+            extra_data = {"login": github_login, "repos": repos}
         )
         db.session.add(o)
     else:
         # User has previously connected to the GitHub client. Update the token.
-        results.access_token = token[0]
+        user.access_token = token[0]
+        github_login = user.extra_data['login']
     
     db.session.commit()
     

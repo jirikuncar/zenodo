@@ -44,8 +44,35 @@ _ = lambda x: x
 PACKAGES = [
     'zenodo.base',
     'zenodo.modules.deposit',
+    'zenodo.modules.github',
     'zenodo.modules.communities',
     'invenio.modules.*',
+]
+
+EXTENSIONS = [
+    'zenodo.ext.oauth',
+    'invenio.ext.confighacks',
+    'invenio.ext.jinja2hacks',
+    'invenio.ext.debug_toolbar',
+    'invenio.ext.babel',
+    'invenio.ext.sqlalchemy',
+    'invenio.ext.sslify',
+    'invenio.ext.cache',
+    'invenio.ext.session',
+    'invenio.ext.login',
+    'invenio.ext.principal',
+    'invenio.ext.email',
+    'invenio.ext.legacy',
+    'invenio.ext.assets',
+    'invenio.ext.template',
+    'invenio.ext.admin',
+    'invenio.ext.logging',
+    'invenio.ext.gravatar',
+    'invenio.ext.collect',
+    'invenio.ext.restful',
+    'flask.ext.menu:Menu',
+    'flask.ext.breadcrumbs:Breadcrumbs',
+    'invenio.modules.deposit.url_converters',
 ]
 
 DEPOSIT_TYPES = [
