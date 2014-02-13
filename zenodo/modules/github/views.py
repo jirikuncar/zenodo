@@ -52,6 +52,7 @@ blueprint = Blueprint(
 
 # TODO: Place this module behind a Zenodo authorized URL
 
+# Authenticated endpoint
 @blueprint.route('/')
 def index():
     context = { "connected": False }
@@ -80,12 +81,14 @@ def index():
     
     return render_template("github/index.html", **context)
 
+# Authenticated endpoint
 @blueprint.route('/connect')
 def connect():
     return remote.authorize(
         callback = url_for('.connected', _external = True)
     )
 
+# Authenticated endpoint
 @blueprint.route('/connected')
 @remote.authorized_handler
 def connected(resp):
@@ -108,6 +111,7 @@ def connected(resp):
         # Get user data
         resp = remote.get('user')
         github_login = resp.data['login']
+        github_name = resp.data['name']
         
         # Get repo data and format JSON
         resp = remote.get("users/%(username)s/repos" % {"username": github_login})
@@ -122,20 +126,22 @@ def connected(resp):
             client_id = remote.consumer_key,
             user_id = current_user.get_id(),
             access_token = token,
-            extra_data = {"login": github_login, "repos": repos}
+            extra_data = {"login": github_login, "name": github_name, "repos": repos}
         )
         db.session.add(o)
     else:
         # User has previously connected to the GitHub client. Update the token.
         user.access_token = token
         github_login = user.extra_data['login']
+        github_name = user.extra_data['name']
     
     db.session.commit()
     session["github_login"] = github_login
+    session["github_name"] = github_name
     
     return redirect( url_for('.index') )
 
-# TODO: Protect endpoint
+# TODO: Authenticated endpoint
 @blueprint.route('/remove-github-hook/<repo>', methods=["POST"])
 def remove_github_hook(repo):
     
@@ -154,7 +160,7 @@ def remove_github_hook(repo):
     
     return json.dumps({"state": "removed"})
 
-# TODO: Protect endpoint
+# TODO: Authenticated endpoint
 @blueprint.route('/create-github-hook/<repo>', methods=["POST"])
 def create_github_hook(repo):
     endpoint = "repos/%(owner)s/%(repo)s/hooks" % {"owner": session["github_login"], "repo": repo}
@@ -163,7 +169,7 @@ def create_github_hook(repo):
     data = {
         "name": "web",
         "config": {
-            "url": "http://requestb.in/1gkugi21",
+            "url": "http://requestb.in/1f45y0u1",
             "content_type": "json"
         },
         "events": ["release"],
@@ -180,6 +186,39 @@ def create_github_hook(repo):
         db.session.commit()
     
     return json.dumps({"state": "added"})
+
+# TODO: Authenticated endpoint
+@blueprint.route('/create-deposition/<repo>', methods=["POST"])
+def create_deposition(repo):
+    api_key = os.environ["ZENODO_API_KEY"]
+    
+    # Given a payload from GitHub ...
+    payload = json.loads(request.data)
+    
+    
+    data = {
+        "metadata": {
+            "upload_type": "software",
+            "publication_date": payload["release"]["published_at"],
+            "title": payload["release"]["name"],
+            "creators": [ {"name": session["github_name"]} ],
+            "description": payload["release"]["body"],
+            "access_right": "open",
+            "license": ""  
+        }
+    }
+    
+    headers = {"Content-Type": "application/json"}
+    endpoint = "https://zenodo-dev.cern.ch/api/deposit/depositions?apikey=%s" % api_key
+    print "ENDPOINT", endpoint
+    r = requests.post(endpoint, data=data, headers=headers)
+    
+    print "HERE"
+    if r.status_code is 201:
+        print r.json()
+        deposition_id = r.json()['id']
+    return payload
+
 
 @remote.tokengetter
 def get_oauth_token():
