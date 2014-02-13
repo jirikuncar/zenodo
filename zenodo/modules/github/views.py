@@ -152,7 +152,7 @@ def remove_github_hook(repo):
         user.extra_data.update()
         db.session.commit()
     
-    return json.dumps({})
+    return json.dumps({"state": "removed"})
 
 # TODO: Protect endpoint
 @blueprint.route('/create-github-hook/<repo>', methods=["POST"])
@@ -179,7 +179,7 @@ def create_github_hook(repo):
         user.extra_data.update()
         db.session.commit()
     
-    return json.dumps(resp.data)
+    return json.dumps({"state": "added"})
 
 @remote.tokengetter
 def get_oauth_token():

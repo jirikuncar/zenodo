@@ -42,12 +42,8 @@ $(document).ready(function() {
       success: function(data, textStatus, jqXHR) {
         
         // TODO: Provide feedback to user about the state of the hook
-        
-        if (data.active === true) {
-          alert("WABAM!");
-        } else {
-          alert("ERROR!!!!");
-        }
+        var feedback = (data.state === "added") ? "GitHub Hook added successfully." : "GitHub Hook removed successfully.";
+        alert(feedback);
         
       }
     });
