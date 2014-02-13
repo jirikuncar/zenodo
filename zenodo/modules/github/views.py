@@ -98,9 +98,7 @@ def connected(resp):
         )
     
     # Store the access token on the session
-    token = resp['access_token']
-    print "TOKEN", resp['access_token']
-    
+    token = resp['access_token']    
     session['github_token'] = (token, '')
     
     # Check if the user has previously created a GitHub OAuth token
@@ -111,17 +109,13 @@ def connected(resp):
         resp = remote.get('user')
         github_login = resp.data['login']
         
-        # Get repo data
+        # Get repo data and format JSON
         resp = remote.get("users/%(username)s/repos" % {"username": github_login})
         repos = resp.data
         
-        # def get_repo_hooks(repo):
-        #     name = repo["name"]
-        #     resp = remote.get("repos/%(owner)s/%(repo)s/hooks" % {"owner": github_login, "repo": name})
-        #     return {"name": name, "hooks": resp.data}
-        # repos = map(get_repo_hooks, repos)
-        def get_repo_name(repo): return {"name": repo["name"], "hook": False}
+        def get_repo_name(repo): return repo["name"]
         repos = map(get_repo_name, repos)
+        repos = dict(zip(repos, [{ "hook": None } for _ in xrange(len(repos))]))
         
         # Put user's GitHub info in database
         o = OAuthTokens(
@@ -137,29 +131,54 @@ def connected(resp):
         github_login = user.extra_data['login']
     
     db.session.commit()
-    
-    # Store the GitHub user on session
     session["github_login"] = github_login
     
     return redirect( url_for('.index') )
 
+# TODO: Protect endpoint
+@blueprint.route('/remove-github-hook/<repo>', methods=["POST"])
+def remove_github_hook(repo):
+    
+    # Get the hook id from the database
+    user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
+    hook_id = user.extra_data["repos"][repo]["hook"]
+    
+    endpoint = "repos/%(owner)s/%(repo)s/hooks/%(hook_id)s" % {"owner": session["github_login"], "repo": repo, "hook_id": hook_id}
+    resp = remote.delete(endpoint)
+    
+    if resp.status is 204:
+        # The hook has successfully been removed by GitHub, so update the user's entry
+        user.extra_data["repos"][repo]["hook"] = None
+        user.extra_data.update()
+        db.session.commit()
+    
+    return json.dumps({})
+
+# TODO: Protect endpoint
 @blueprint.route('/create-github-hook/<repo>', methods=["POST"])
 def create_github_hook(repo):
-    
-    # TODO: Check that we have github_login on session
-    
     endpoint = "repos/%(owner)s/%(repo)s/hooks" % {"owner": session["github_login"], "repo": repo}
-    print endpoint
+    
+    # TODO: Use Zenodo API
     data = {
         "name": "web",
         "config": {
-            "url": "http://requestb.in/1gkugi21"
+            "url": "http://requestb.in/1gkugi21",
+            "content_type": "json"
         },
         "events": ["release"],
         "active": True
     }
     
     resp = remote.post(endpoint, format='json', data=data)
+    if resp.status is 201:
+        
+        # Hook was created, so update the database storing the hook id
+        user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
+        user.extra_data["repos"][repo]["hook"] = resp.data["id"]
+        user.extra_data.update()
+        db.session.commit()
+    
     return json.dumps(resp.data)
 
 @remote.tokengetter

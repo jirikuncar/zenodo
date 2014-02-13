@@ -34,17 +34,25 @@ $(document).ready(function() {
     var repoName = data.el[0].dataset.repoName;
     
     // Post to Zenodo
-    $.post("create-github-hook/" + repoName, function(data, textStatus, jqXHR) {
-      
-      // TODO: Provide feedback to user about the state of the hook
-      
-      if (data.active === true) {
-        alert("wabam!")
-      } else {
-        alert('ERROR!!!')
+    endpoint = state ? "create-github-hook/" : "remove-github-hook/"
+    $.ajax({
+      url: endpoint + repoName,
+      type: "POST",
+      dataType: "json",
+      success: function(data, textStatus, jqXHR) {
+        
+        // TODO: Provide feedback to user about the state of the hook
+        
+        if (data.active === true) {
+          alert("WABAM!");
+        } else {
+          alert("ERROR!!!!");
+        }
+        
       }
-    }, "json");
-  })
+    });
+    
+  });
   
   
   // Select DOM elements
@@ -65,11 +73,12 @@ $(document).ready(function() {
       
       <p>Apply a persistent research identifier to your GitHub projects.</p> 
       
-      {% for repo in repos %}
+      
+      {% for repo, description in repos.iteritems() %}
       <dl class="dl-horizontal">
-        <dt>{{repo.name}}</dt>
+        <dt>{{repo}}</dt>
         <dd>
-          <input type="checkbox" {{ 'checked' if repo.hook }} data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo.name}}">
+          <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo}}">
         </dd>
       </dl>
       {% endfor %}
