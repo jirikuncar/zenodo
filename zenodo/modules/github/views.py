@@ -193,7 +193,7 @@ def create_github_hook(repo):
 
 
 # TODO: Authenticated endpoint
-@blueprint.route('/sync', methods=["PUT"])
+@blueprint.route('/sync', methods=["GET"])
 def sync_repositories():
     
     resp = remote.get("users/%(username)s/repos" % {"username": session["github_login"]})
@@ -216,11 +216,12 @@ def sync_repositories():
     for name, description in repos.iteritems():
         if name in extra_data["repos"]:
             repos[name] = extra_data["repos"][name]
+    
     user.extra_data["repos"] = repos
     user.extra_data.update()
     db.session.commit()
     
-    return json.dumps({"state": "synced"});
+    return redirect( url_for('.index') )
 
 # TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
 # TODO: Move to celery task
@@ -255,7 +256,7 @@ def create_deposition():
     zenodo_json_path = payload["release"]["html_url"]
     zenodo_json_path = zenodo_json_path.replace("github.com", "raw.github.com")
     zenodo_json_path = zenodo_json_path.replace("releases/tag/", '')
-    zenodo_json_path += "/zenodo.json"
+    zenodo_json_path += "/.zenodo.json"
     
     # Get the zenodo.json file
     r = requests.get(zenodo_json_path)

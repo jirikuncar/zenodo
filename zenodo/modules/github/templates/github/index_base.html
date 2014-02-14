@@ -62,15 +62,15 @@ $(document).ready(function() {
     
     $.ajax({
       url: "/github/sync",
-      type: "PUT",
+      type: "GET",
       dataType: "json",
       success: function(data, textStatus, jqXHR) {
         
         // TODO: Update DOM
         
-        // TODO: Provide feedback to user about the state of the hook
-        var feedback = (data.state === "synced") ? "GitHub repos synced successfully." : "GitHub repos failed to sync.";
-        alert(feedback);
+        // // TODO: Provide feedback to user about the state of the hook
+        // var feedback = (data.state === "synced") ? "GitHub repos synced successfully." : "GitHub repos failed to sync.";
+        // alert(feedback);
         
       }
     });
