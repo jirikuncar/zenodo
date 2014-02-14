@@ -29,6 +29,7 @@ from __future__ import absolute_import
 
 import os
 import json
+from datetime import datetime
 
 import requests
 from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify
@@ -195,29 +196,30 @@ def create_deposition(repo):
     # Given a payload from GitHub ...
     payload = json.loads(request.data)
     
-    
+    publication_date = datetime.strptime(payload["release"]["published_at"], "%Y-%m-%dT%H:%M:%SZ")
     data = {
         "metadata": {
             "upload_type": "software",
-            "publication_date": payload["release"]["published_at"],
+            "publication_date": publication_date.strftime("%Y-%m-%d"),
             "title": payload["release"]["name"],
-            "creators": [ {"name": session["github_name"]} ],
+            "creators": [
+                {"name": session["github_name"] }
+            ],
             "description": payload["release"]["body"],
-            "access_right": "open",
-            "license": ""  
+            # "access_right": "open",
+            # "license": ""
         }
     }
     
     headers = {"Content-Type": "application/json"}
-    endpoint = "https://zenodo-dev.cern.ch/api/deposit/depositions?apikey=%s" % api_key
-    print "ENDPOINT", endpoint
-    r = requests.post(endpoint, data=data, headers=headers)
+    r = requests.post("https://zenodo-dev.cern.ch/api/deposit/depositions?apikey=%s" % api_key, data=json.dumps(data), headers=headers, verify=False)
+    print "HERE WE ARE", r
     
-    print "HERE"
     if r.status_code is 201:
-        print r.json()
+        print "BLAH BLAH BLAH", r.json()
         deposition_id = r.json()['id']
-    return payload
+    
+    return json.dumps(payload)
 
 
 @remote.tokengetter
