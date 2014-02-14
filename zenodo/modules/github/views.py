@@ -36,6 +36,9 @@ from flask import Blueprint, render_template, redirect, url_for, session, reques
 from flask.ext.login import current_user
 
 from invenio.ext.sqlalchemy import db
+from invenio.ext.email import send_email
+from invenio.config import CFG_SITE_ADMIN_EMAIL, CFG_SITE_NAME
+from invenio.ext.template import render_template_to_string
 from invenio.modules.accounts.models import User
 from zenodo.ext.oauth import oauth
 
@@ -188,13 +191,46 @@ def create_github_hook(repo):
     
     return json.dumps({"state": "added"})
 
+
+# TODO: Authenticated endpoint
+@blueprint.route('/sync', methods=["PUT"])
+def sync_repositories():
+    
+    resp = remote.get("users/%(username)s/repos" % {"username": session["github_login"]})
+    if resp.status is not 200:
+        return json.dumps({"state": "error syncing"})
+    
+    # Query for our current repo data
+    user = OAuthTokens.query.filter_by( user_id = current_user.get_id() ).filter_by( client_id = remote.consumer_key ).first()
+    if user is None:
+        return json.dumps({"state": "error syncing"})
+    
+    extra_data = user.extra_data
+    
+    repos = resp.data
+    def get_repo_name(repo): return repo["name"]
+    repos = map(get_repo_name, repos)
+    repos = dict(zip(repos, [{ "hook": None } for _ in xrange(len(repos))]))
+    
+    # Map the existing data with the fresh dump from GitHub
+    for name, description in repos.iteritems():
+        if name in extra_data["repos"]:
+            repos[name] = extra_data["repos"][name]
+    user.extra_data["repos"] = repos
+    user.extra_data.update()
+    db.session.commit()
+    
+    return json.dumps({"state": "synced"});
+
 # TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
-# TODO: Use user's Zenodo API key or OAuth token ...
+# TODO: Move to celery task
 @blueprint.route('/create-deposition', methods=["POST"])
 def create_deposition():
     payload = request.json
     
-    # GitHub sends a small payload when the hook is created. Avoid creating
+    # TODO: Check that the OAuth token is valid and connect to Zenodo as the token's owner
+    
+    # GitHub sends a small test payload when the hook is created. Avoid creating
     # a deposition from it.
     if 'hook_id' in payload:
         return json.dumps({"state": "hook-added"})
@@ -205,47 +241,59 @@ def create_deposition():
     headers = {"Content-Type": "application/json"}
     r = requests.post("https://zenodo-dev.cern.ch/api/deposit/depositions?apikey=%s" % api_key, data="{}", headers=headers, verify=False)
     
-    if r.status_code is 201:
-        
-        # The deposition has been created successfully.
-        deposition_id = r.json()['id']
-        
-        # At this point we need to get metadata. Since we require the user to include a zenodo.json file in the repository,
-        # we'll fetch it here, or prompt the user to supply metadata via an email notification.
-        
-        # Format the raw url from the release payload
-        zenodo_json_path = payload["release"]["html_url"]
-        zenodo_json_path = zenodo_json_path.replace("github.com", "raw.github.com")
-        zenodo_json_path = zenodo_json_path.replace("releases/tag/", '')
-        zenodo_json_path += "/zenodo.json"
-        
-        # Get the zenodo.json file
-        r = requests.get(zenodo_json_path)
-        if r.status_code is 200:
-            
-            zenodo_metadata = { "metadata": json.loads(r.text) }
-            r = requests.put(
-                "https://zenodo-dev.cern.ch/api/deposit/depositions/%(deposition_id)s?apikey=%(api_key)s" % {"deposition_id": deposition_id, "api_key": api_key},
-                data=json.dumps(zenodo_metadata),
-                headers=headers,
-                verify=False
-            )
-            
-            print r, r.status_code
-            print "ZENODO METADATA", zenodo_metadata
-        
-        # TODO: Handle other status codes
-        else:
-            # Looks like there is no zenodo.json file in the repository
-            # TODO: Notify user via email to offer needed metadata before Zenodo
-            # issues a DOI
-            pass
-            
-        print zenodo_json_path
-        
-    else:
+    if r.status_code is not 201:
         # The deposition was not created. What's a good behavior here?!?!
-        pass
+        return json.dumps({"error": "deposition was not created"})
+    
+    # The deposition has been created successfully.
+    deposition_id = r.json()['id']
+    
+    # At this point we need to get metadata. Since we require the user to include a zenodo.json file in the repository,
+    # we'll fetch it here, or prompt the user to supply metadata via an email notification.
+    
+    # Format the raw url from the release payload
+    zenodo_json_path = payload["release"]["html_url"]
+    zenodo_json_path = zenodo_json_path.replace("github.com", "raw.github.com")
+    zenodo_json_path = zenodo_json_path.replace("releases/tag/", '')
+    zenodo_json_path += "/zenodo.json"
+    
+    # Get the zenodo.json file
+    r = requests.get(zenodo_json_path)
+    if r.status_code is 200:
+        
+        zenodo_metadata = { "metadata": json.loads(r.text) }
+        r = requests.put(
+            "https://zenodo-dev.cern.ch/api/deposit/depositions/%(deposition_id)s?apikey=%(api_key)s" % {"deposition_id": deposition_id, "api_key": api_key},
+            data=json.dumps(zenodo_metadata),
+            headers=headers,
+            verify=False
+        )
+    
+    # TODO: Handle other status codes
+    else:
+        # Looks like there is no zenodo.json file in the repository
+        # TODO: Notify user via email to offer needed metadata before Zenodo
+        # issues a DOI
+        
+        # TODO: Query the user based on the OAuth token, get the email address and use in send_mail
+        send_email(
+            CFG_SITE_ADMIN_EMAIL,
+            CFG_SITE_ADMIN_EMAIL,
+            subject="Metadata Needed For Deposition",
+            content=render_template_to_string(
+                "github/email_zenodo_json.html"
+            )
+        )
+    
+    # Download the archive
+    archive_url = payload["release"]["zipball_url"]
+    archive_name = "%(repo_name)s-%(tag_name)s.zip" % {"repo_name": payload["repository"]["name"], "tag_name": payload["release"]["tag_name"]}
+    
+    r = requests.get(archive_url, stream=True)
+    if r.status_code is 200:
+        with open(archive_name, 'wb') as fd:
+            for chunk in r.iter_content(256):
+                fd.write(chunk)
     
     # What's convention here? Return something or not?
     return json.dumps({"state": "added"})

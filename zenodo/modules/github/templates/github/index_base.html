@@ -57,6 +57,26 @@ $(document).ready(function() {
     window.location = "/github/connect";
   });
   
+  var syncButton = $("button[name='sync-repos']");
+  syncButton.on("click", function() {
+    
+    $.ajax({
+      url: "/github/sync",
+      type: "PUT",
+      dataType: "json",
+      success: function(data, textStatus, jqXHR) {
+        
+        // TODO: Update DOM
+        
+        // TODO: Provide feedback to user about the state of the hook
+        var feedback = (data.state === "synced") ? "GitHub repos synced successfully." : "GitHub repos failed to sync.";
+        alert(feedback);
+        
+      }
+    });
+    
+  });
+  
 });
 </script>
 {% endblock %}
@@ -67,7 +87,9 @@ $(document).ready(function() {
       {% if connected %}
       <h3>GitHub Projects</h3>
       
-      <p>Apply a persistent research identifier to your GitHub projects.</p> 
+      <p>Apply a persistent research identifier to your GitHub projects.</p>
+      
+      <button name="sync-repos">Sync Repositories</button>
       
       {% for repo, description in repos.iteritems() %}
       <dl class="dl-horizontal">
