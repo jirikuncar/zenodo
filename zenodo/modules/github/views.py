@@ -170,7 +170,7 @@ def create_github_hook(repo):
     data = {
         "name": "web",
         "config": {
-            "url": "http://requestb.in/1f45y0u1",
+            "url": "http://github.zenodo.ultrahook.com",
             "content_type": "json"
         },
         "events": ["release"],
@@ -188,38 +188,67 @@ def create_github_hook(repo):
     
     return json.dumps({"state": "added"})
 
-# TODO: Authenticated endpoint
-@blueprint.route('/create-deposition/<repo>', methods=["POST"])
-def create_deposition(repo):
+# TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
+# TODO: Use user's Zenodo API key or OAuth token ...
+@blueprint.route('/create-deposition', methods=["POST"])
+def create_deposition():
+    payload = request.json
+    
+    # GitHub sends a small payload when the hook is created. Avoid creating
+    # a deposition from it.
+    if 'hook_id' in payload:
+        return json.dumps({"state": "hook-added"})
+    
     api_key = os.environ["ZENODO_API_KEY"]
     
-    # Given a payload from GitHub ...
-    payload = json.loads(request.data)
-    
-    publication_date = datetime.strptime(payload["release"]["published_at"], "%Y-%m-%dT%H:%M:%SZ")
-    data = {
-        "metadata": {
-            "upload_type": "software",
-            "publication_date": publication_date.strftime("%Y-%m-%d"),
-            "title": payload["release"]["name"],
-            "creators": [
-                {"name": session["github_name"] }
-            ],
-            "description": payload["release"]["body"],
-            # "access_right": "open",
-            # "license": ""
-        }
-    }
-    
+    # First create an empty deposition and attach metadata later.
     headers = {"Content-Type": "application/json"}
-    r = requests.post("https://zenodo-dev.cern.ch/api/deposit/depositions?apikey=%s" % api_key, data=json.dumps(data), headers=headers, verify=False)
-    print "HERE WE ARE", r
+    r = requests.post("https://zenodo-dev.cern.ch/api/deposit/depositions?apikey=%s" % api_key, data="{}", headers=headers, verify=False)
     
     if r.status_code is 201:
-        print "BLAH BLAH BLAH", r.json()
+        
+        # The deposition has been created successfully.
         deposition_id = r.json()['id']
+        
+        # At this point we need to get metadata. Since we require the user to include a zenodo.json file in the repository,
+        # we'll fetch it here, or prompt the user to supply metadata via an email notification.
+        
+        # Format the raw url from the release payload
+        zenodo_json_path = payload["release"]["html_url"]
+        zenodo_json_path = zenodo_json_path.replace("github.com", "raw.github.com")
+        zenodo_json_path = zenodo_json_path.replace("releases/tag/", '')
+        zenodo_json_path += "/zenodo.json"
+        
+        # Get the zenodo.json file
+        r = requests.get(zenodo_json_path)
+        if r.status_code is 200:
+            
+            zenodo_metadata = { "metadata": json.loads(r.text) }
+            r = requests.put(
+                "https://zenodo-dev.cern.ch/api/deposit/depositions/%(deposition_id)s?apikey=%(api_key)s" % {"deposition_id": deposition_id, "api_key": api_key},
+                data=json.dumps(zenodo_metadata),
+                headers=headers,
+                verify=False
+            )
+            
+            print r, r.status_code
+            print "ZENODO METADATA", zenodo_metadata
+        
+        # TODO: Handle other status codes
+        else:
+            # Looks like there is no zenodo.json file in the repository
+            # TODO: Notify user via email to offer needed metadata before Zenodo
+            # issues a DOI
+            pass
+            
+        print zenodo_json_path
+        
+    else:
+        # The deposition was not created. What's a good behavior here?!?!
+        pass
     
-    return json.dumps(payload)
+    # What's convention here? Return something or not?
+    return json.dumps({"state": "added"})
 
 
 @remote.tokengetter
