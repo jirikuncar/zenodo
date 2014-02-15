@@ -296,8 +296,29 @@ def create_deposition():
             for chunk in r.iter_content(256):
                 fd.write(chunk)
     
-    # What's convention here? Return something or not?
-    return json.dumps({"state": "added"})
+    # Append the file to the deposition
+    data = {'filename': archive_name}
+    files = {'file': open(archive_name, 'rb')}
+    r = requests.post(
+        "https://zenodo-dev.cern.ch/api/deposit/depositions/%(deposition_id)s/files?apikey=%(api_key)s" % {"deposition_id": deposition_id, "api_key": api_key},
+        data=data,
+        files=files,
+        verify=False
+    )
+    if r.status_code is not 201:
+        # TODO: Write email stating that upload of file has failed.
+        return json.dumps({"error": "file was not added to deposition"})
+    
+    # Publish the deposition!
+    r = requests.post(
+        "https://zenodo-dev.cern.ch/api/deposit/depositions/%(deposition_id)s/actions/publish?apikey=%(api_key)s" % {"deposition_id": deposition_id, "api_key": api_key},
+        verify=False
+    )
+    if r.status_code is 202:
+        return json.dumps({"state": "deposition added successfully"})
+    
+    print r.status_code
+    return json.dumps({"state": "deposition not published"})
 
 
 @remote.tokengetter
