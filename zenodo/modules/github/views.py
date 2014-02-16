@@ -173,12 +173,14 @@ def create_github_hook(repo):
     data = {
         "name": "web",
         "config": {
-            "url": "http://github.zenodo.ultrahook.com",
+            # TODO: Update to pass in token instead of Zenodo user id
+            "url": "http://github.zenodo.ultrahook.com?token=%(token)s" % {"token": current_user.get_id()},
             "content_type": "json"
         },
         "events": ["release"],
         "active": True
     }
+    print "HERE", data
     
     resp = remote.post(endpoint, format='json', data=data)
     if resp.status is 201:
@@ -225,11 +227,10 @@ def sync_repositories():
 
 # TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
 # TODO: Move to celery task
+# TODO: Break out into multiple functions
 @blueprint.route('/create-deposition', methods=["POST"])
 def create_deposition():
     payload = request.json
-    
-    # TODO: Check that the OAuth token is valid and connect to Zenodo as the token's owner
     
     # GitHub sends a small test payload when the hook is created. Avoid creating
     # a deposition from it.
@@ -237,13 +238,21 @@ def create_deposition():
         return json.dumps({"state": "hook-added"})
     
     api_key = os.environ["ZENODO_API_KEY"]
+    zenodo_api = "https://zenodo-dev.cern.ch/api"
+    token = request.args.get('token') # TODO: apply authorization decorator above
     
     # First create an empty deposition and attach metadata later.
     headers = {"Content-Type": "application/json"}
-    r = requests.post("https://zenodo-dev.cern.ch/api/deposit/depositions?apikey=%s" % api_key, data="{}", headers=headers, verify=False)
+    r = requests.post(
+        "%(api)s/deposit/depositions?apikey=%(api_key)s" % {"api": zenodo_api, "api_key": api_key},
+        data="{}",
+        headers=headers,
+        verify=False
+    )
     
     if r.status_code is not 201:
         # The deposition was not created. What's a good behavior here?!?!
+        # Send notification to user?
         return json.dumps({"error": "deposition was not created"})
     
     # The deposition has been created successfully.
@@ -264,7 +273,8 @@ def create_deposition():
         
         zenodo_metadata = { "metadata": json.loads(r.text) }
         r = requests.put(
-            "https://zenodo-dev.cern.ch/api/deposit/depositions/%(deposition_id)s?apikey=%(api_key)s" % {"deposition_id": deposition_id, "api_key": api_key},
+            "%(api)s/deposit/depositions/%(deposition_id)s?apikey=%(api_key)s" \
+            % {"api": zenodo_api, "deposition_id": deposition_id, "api_key": api_key},
             data=json.dumps(zenodo_metadata),
             headers=headers,
             verify=False
@@ -277,9 +287,10 @@ def create_deposition():
         # issues a DOI
         
         # TODO: Query the user based on the OAuth token, get the email address and use in send_mail
+        email = User.query.filter_by(id = token).first().email
         send_email(
             CFG_SITE_ADMIN_EMAIL,
-            CFG_SITE_ADMIN_EMAIL,
+            email,
             subject="Metadata Needed For Deposition",
             content=render_template_to_string(
                 "github/email_zenodo_json.html"
@@ -287,8 +298,11 @@ def create_deposition():
         )
     
     # Download the archive
-    archive_url = payload["release"]["zipball_url"]
-    archive_name = "%(repo_name)s-%(tag_name)s.zip" % {"repo_name": payload["repository"]["name"], "tag_name": payload["release"]["tag_name"]}
+    release = payload["release"]
+    repository = payload["repository"]
+    
+    archive_url = release["zipball_url"]
+    archive_name = "%(repo_name)s-%(tag_name)s.zip" % {"repo_name": repository["name"], "tag_name": release["tag_name"]}
     
     r = requests.get(archive_url, stream=True)
     if r.status_code is 200:
@@ -300,7 +314,8 @@ def create_deposition():
     data = {'filename': archive_name}
     files = {'file': open(archive_name, 'rb')}
     r = requests.post(
-        "https://zenodo-dev.cern.ch/api/deposit/depositions/%(deposition_id)s/files?apikey=%(api_key)s" % {"deposition_id": deposition_id, "api_key": api_key},
+        "%(api)s/deposit/depositions/%(deposition_id)s/files?apikey=%(api_key)s" % \
+        {"api": zenodo_api, "deposition_id": deposition_id, "api_key": api_key},
         data=data,
         files=files,
         verify=False
@@ -311,9 +326,18 @@ def create_deposition():
     
     # Publish the deposition!
     r = requests.post(
-        "https://zenodo-dev.cern.ch/api/deposit/depositions/%(deposition_id)s/actions/publish?apikey=%(api_key)s" % {"deposition_id": deposition_id, "api_key": api_key},
+        "%(api)s/deposit/depositions/%(deposition_id)s/actions/publish?apikey=%(api_key)s" % \
+        {"api": zenodo_api, "deposition_id": deposition_id, "api_key": api_key},
         verify=False
     )
+    
+    # Add to extra_data
+    user = OAuthTokens.query.filter_by( user_id = token ).filter_by( client_id = remote.consumer_key ).first()
+    user.extra_data["repos"][payload["repository"]["name"]]["DOI"] = r.json()["doi"]
+    user.extra_data["repos"][payload["repository"]["name"]]["modified"] = r.json()["modified"]
+    user.extra_data.update()
+    db.session.commit()
+    
     if r.status_code is 202:
         return json.dumps({"state": "deposition added successfully"})
     
