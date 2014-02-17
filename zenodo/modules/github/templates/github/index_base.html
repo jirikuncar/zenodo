@@ -33,11 +33,16 @@ $(document).ready(function() {
     var state = data.value;
     var repoName = data.el[0].dataset.repoName;
     
+    console.log("HERE", repoName);
+    
     // Post to Zenodo
     var endpoint = state ? "create-github-hook/" : "remove-github-hook/"
+    console.log("POSTING to ", endpoint);
     $.ajax({
-      url: endpoint + repoName,
+      url: endpoint,
       type: "POST",
+      data: JSON.stringify({repo: repoName}),
+      contentType: "application/json; charset=utf-8",
       dataType: "json",
       success: function(data, textStatus, jqXHR) {
         console.log(data);
@@ -88,31 +93,35 @@ $(document).ready(function() {
 
 {% block body %}
 <div class="row" id="file_container">
-    <div class="col-sm-6 col-md-8">
+    <div class="col-sm-12 col-md-12">
       {% if connected %}
-      <h3>GitHub Repositories <span name="sync-repos" class="extra-small">(last synced {{last_sync}})</span></h3>
       
-      <p>Apply a persistent research identifier to your GitHub projects.</p>
+      <h3><i class="fa fa-github"></i> GitHub Repositories <span name="sync-repos" class="extra-small">(updated {{last_sync}})</span></h3>
       
-      {% for repo, description in repos.iteritems() %}
-      <div class="row" data-repo="{{repo}}">
-        <div class="col-md-3">
-          <h4 class="repo"><small>{{repo}}</small></h4>
-        </div>
-        <div class="col-md-3 doi-toggle">
-          <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo}}">
-          <i class="hook-status fa"></i>
-        </div>
-        <div class="col-md-3">{{description.DOI}}</div>
-        <div class="col-md-3">{{description.modified}}</div>
-      </div>
-      {% endfor %}
+      <table class="table table-striped">
+        <tbody>
+        {% for repo, description in repos.iteritems() %}
+        <tr>
+          <td>
+            <h4 class="repo">{{repo}} <small>{{description.DOI}}</small></h4>
+            <small class="text-muted repo-description"> {{description.description}}</small>
+          </td>
+          <td>
+            <div class="doi-toggle">
+              <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-repo-name="{{repo}}">
+              <i class="hook-status fa"></i>
+              <br/>
+              <small class="text-muted repo-description"> {{description.modified|naturaltime if description.get('modified') else ''}}</small>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
       
       {% else %}
       <button name="connect-to-github" type="submit" class="btn btn-default"><i class="fa fa-github fa-lg"></i> Connect to GitHub</button>
       {% endif %}
-    </div>
-    <div class="col-sm-6 col-md-4">
     </div>
 </div>
 {% endblock %}

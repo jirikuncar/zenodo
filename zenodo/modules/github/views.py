@@ -29,8 +29,12 @@ from __future__ import absolute_import
 
 import os
 import json
+import pytz
+import dateutil
+from dateutil.parser import parse
 from datetime import datetime, timedelta
 
+import humanize
 import requests
 from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify, current_app
 from flask.ext.login import current_user
@@ -58,15 +62,26 @@ blueprint = Blueprint(
 
 # TODO: Place this module behind a Zenodo authorized URL
 
+
+@blueprint.app_template_filter('naturaltime')
+def naturaltime(val):
+    val = parse(val)
+    now = datetime.utcnow().replace(tzinfo = pytz.utc)
+    
+    return humanize.naturaltime(now - val)
+
 def get_repositories(user):
     """Helper method to get a list of current user's repositories from GitHub."""
-    r = remote.get("users/%(username)s/repos" % {"username": session["github_login"]})
+    r = remote.get("users/%(username)s/repos?type=owner&sort=full_name" % {"username": session["github_login"]})
     
-    repos = r.data
-    def get_repo_name(repo): return repo["name"]
-    repos = map(get_repo_name, repos)
+    repo_data = r.data
+    def get_repo_name(repo): return repo["full_name"]
+    def get_repo_data(repo): return { "hook": None, "description": repo["description"] }
+    
+    repo_names = map(get_repo_name, repo_data)
+    repo_data = map(get_repo_data, repo_data)
     repos = dict( \
-        zip(repos, [{ "hook": None } for _ in xrange(len(repos))]) \
+        zip(repo_names, repo_data) \
     )
     
     if user is not None:
@@ -125,7 +140,7 @@ def index():
             context["connected"] = True
             context["repos"] = extra_data['repos']
             context["name"] = extra_data['login']
-            context["last_sync"] = extra_data["repos_last_sync"]
+            context["last_sync"] = humanize.naturaltime(datetime.now() - last_sync)
 
     return render_template("github/index.html", **context)
 
@@ -194,16 +209,18 @@ def connected(resp):
     return redirect( url_for('.index') )
 
 # TODO: Authenticated endpoint
-@blueprint.route('/remove-github-hook/<repo>', methods=["POST"])
-def remove_github_hook(repo):
+@blueprint.route('/remove-github-hook', methods=["POST"])
+def remove_github_hook():
     status = {"status": False}
+    repo = request.json["repo"]
     
     # Get the hook id from the database
     user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
     hook_id = user.extra_data["repos"][repo]["hook"]
 
-    endpoint = "repos/%(owner)s/%(repo)s/hooks/%(hook_id)s" % {"owner": session["github_login"], "repo": repo, "hook_id": hook_id}
-    resp = remote.delete(endpoint)
+    resp = remote.delete(
+        "repos/%(full_name)s/hooks/%(hook_id)s" % {"full_name": repo, "hook_id": hook_id},
+    )
 
     if resp.status is 204:
         # The hook has successfully been removed by GitHub, update the status and DB
@@ -216,9 +233,10 @@ def remove_github_hook(repo):
     return json.dumps(status)
 
 # TODO: Authenticated endpoint
-@blueprint.route('/create-github-hook/<repo>', methods=["POST"])
-def create_github_hook(repo):
+@blueprint.route('/create-github-hook', methods=["POST"])
+def create_github_hook():
     status = {"status": False}
+    repo = request.json["repo"]
     
     user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
     github_login = user.extra_data["login"]
@@ -228,7 +246,7 @@ def create_github_hook(repo):
     data = {
         "name": "web",
         "config": {
-            "url": "https://github.zenodo.ultrahook.com?access_token=%(token)s" % {"token": zenodo_token_id},
+            "url": "http://github.zenodo.ultrahook.com?access_token=%(token)s" % {"token": zenodo_token_id},
             "content_type": "json"
         },
         "events": ["release"],
@@ -236,10 +254,11 @@ def create_github_hook(repo):
     }
 
     resp = remote.post(
-        "repos/%(owner)s/%(repo)s/hooks" % {"owner": github_login, "repo": repo},
+        "repos/%(full_name)s/hooks" % {"full_name": repo},
         format='json',
         data=data
     )
+    
     
     if resp.status is 201:
         # Hook was created, updated the status and database
@@ -340,7 +359,7 @@ def create_deposition(data):
     # Download the archive
     release = payload["release"]
     repository = payload["repository"]
-    repository_name = repository["name"]
+    repository_name = repository["full_name"]
 
     archive_url = release["zipball_url"]
     archive_name = "%(repo_name)s-%(tag_name)s.zip" % {"repo_name": repository["name"], "tag_name": release["tag_name"]}

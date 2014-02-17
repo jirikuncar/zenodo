@@ -846,21 +846,21 @@ fieldset label i {
 
 /* GitHub View Styles */
 
-h3 .extra-small {
+div .extra-small {
   font-size: 50%;
   cursor: pointer;
 }
 
-h3 .extra-small:hover {
+div .extra-small:hover {
   color: red;
 }
 
 h4.repo {
-  text-align: right;
 }
 
-div.doi-toggle {
+.doi-toggle {
   margin: 10px 0;
+  text-align: right;
 }
 
 i.hook-status {
