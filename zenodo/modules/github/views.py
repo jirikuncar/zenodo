@@ -82,6 +82,8 @@ def index():
             context["connected"] = True
             context["repos"] = extra_data['repos']
             context["name"] = extra_data['login']
+            
+            print "EXTRA_DATA", extra_data
     
     return render_template("github/index.html", **context)
 
@@ -300,6 +302,7 @@ def create_deposition():
     # Download the archive
     release = payload["release"]
     repository = payload["repository"]
+    repository_name = repository["name"]
     
     archive_url = release["zipball_url"]
     archive_name = "%(repo_name)s-%(tag_name)s.zip" % {"repo_name": repository["name"], "tag_name": release["tag_name"]}
@@ -333,15 +336,14 @@ def create_deposition():
     
     # Add to extra_data
     user = OAuthTokens.query.filter_by( user_id = token ).filter_by( client_id = remote.consumer_key ).first()
-    user.extra_data["repos"][payload["repository"]["name"]]["DOI"] = r.json()["doi"]
-    user.extra_data["repos"][payload["repository"]["name"]]["modified"] = r.json()["modified"]
+    user.extra_data["repos"][repository_name]["DOI"] = r.json()["doi"]
+    user.extra_data["repos"][repository_name]["modified"] = r.json()["modified"]
     user.extra_data.update()
     db.session.commit()
     
     if r.status_code is 202:
         return json.dumps({"state": "deposition added successfully"})
     
-    print r.status_code
     return json.dumps({"state": "deposition not published"})
 
 

@@ -92,6 +92,17 @@ $(document).ready(function() {
       <button name="sync-repos">Sync Repositories</button>
       
       {% for repo, description in repos.iteritems() %}
+      <div class="row">
+        <div class="col-md-3">{{repo}}</div>
+        <div class="col-md-3">
+          <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo}}">          
+        </div>
+        <div class="col-md-3">{{description.DOI}}</div>
+        <div class="col-md-3">{{description.modified}}</div>
+      </div>
+      {% endfor %}
+      
+      {% for repo, description in repos.iteritems() %}
       <dl class="dl-horizontal">
         <dt>{{repo}}</dt>
         <dd>
