@@ -180,7 +180,7 @@ def create_github_hook(repo):
     github_login = user.extra_data["login"]
     zenodo_token_id = Token.query.filter_by(id = user.extra_data["zenodo_token_id"]).first().access_token
     
-    # TODO: Use Zenodo endpoint
+    # TODO: Use Zenodo endpoint instead of Ultrahook!!!
     data = {
         "name": "web",
         "config": {
@@ -241,11 +241,13 @@ def sync_repositories():
 # TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
 # TODO: Move to celery task
 # TODO: Break out into multiple functions
+# TODO: Ensure duplicate releases are not created.
 @blueprint.route('/create-deposition', methods=["POST"])
 @oauth2.require_oauth()
-def create_deposition():
+def create_deposition(data):
+    user_email = data.email
     payload = request.json
-
+    
     # GitHub sends a small test payload when the hook is created. Avoid creating
     # a deposition from it.
     if 'hook_id' in payload:
@@ -253,7 +255,7 @@ def create_deposition():
 
     api_key = current_app.config["ZENODO_API_KEY"]
     zenodo_api = "https://zenodo-dev.cern.ch/api"
-    token = request.args.get('token') # TODO: apply authorization decorator above
+    zenodo_token = request.args.get('access_token')
 
     # First create an empty deposition and attach metadata later.
     headers = {"Content-Type": "application/json"}
@@ -272,7 +274,7 @@ def create_deposition():
     # The deposition has been created successfully.
     deposition_id = r.json()['id']
 
-    # At this point we need to get metadata. Since we require the user to include a zenodo.json file in the repository,
+    # At this point we need to get metadata. Since we require the user to include a .zenodo.json file in the repository,
     # we'll fetch it here, or prompt the user to supply metadata via an email notification.
 
     # Format the raw url from the release payload
@@ -281,7 +283,7 @@ def create_deposition():
     zenodo_json_path = zenodo_json_path.replace("releases/tag/", '')
     zenodo_json_path += "/.zenodo.json"
 
-    # Get the zenodo.json file
+    # Get the .zenodo.json file
     r = requests.get(zenodo_json_path)
     if r.status_code is 200:
 
@@ -296,15 +298,10 @@ def create_deposition():
 
     # TODO: Handle other status codes
     else:
-        # Looks like there is no zenodo.json file in the repository
-        # TODO: Notify user via email to offer needed metadata before Zenodo
-        # issues a DOI
-
-        # TODO: Query the user based on the OAuth token, get the email address and use in send_mail
-        email = User.query.filter_by(id = token).first().email
+        # Notify user when there is no .zenodo.json file in the repository.
         send_email(
             CFG_SITE_ADMIN_EMAIL,
-            email,
+            user_email,
             subject="Metadata Needed For Deposition",
             content=render_template_to_string(
                 "github/email_zenodo_json.html"
