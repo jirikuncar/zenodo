@@ -245,6 +245,7 @@ def sync_repositories():
 @blueprint.route('/create-deposition', methods=["POST"])
 @oauth2.require_oauth()
 def create_deposition(data):
+    user_id = data.user.id
     user_email = data.email
     payload = request.json
     
@@ -344,7 +345,7 @@ def create_deposition(data):
     )
 
     # Add to extra_data
-    user = OAuthTokens.query.filter_by( user_id = token ).filter_by( client_id = remote.consumer_key ).first()
+    user = OAuthTokens.query.filter_by( user_id = user_id ).filter_by( client_id = remote.consumer_key ).first()
     user.extra_data["repos"][repository_name]["DOI"] = r.json()["doi"]
     user.extra_data["repos"][repository_name]["modified"] = r.json()["modified"]
     user.extra_data.update()
