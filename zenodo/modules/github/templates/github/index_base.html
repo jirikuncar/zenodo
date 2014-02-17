@@ -34,7 +34,7 @@ $(document).ready(function() {
     var repoName = data.el[0].dataset.repoName;
     
     // Post to Zenodo
-    endpoint = state ? "create-github-hook/" : "remove-github-hook/"
+    var endpoint = state ? "create-github-hook/" : "remove-github-hook/"
     $.ajax({
       url: endpoint + repoName,
       type: "POST",
@@ -53,9 +53,6 @@ $(document).ready(function() {
           el.removeClass(status);
           el.css('opacity', 1);
         });
-        
-        
-        var feedback = (data.state === "added") ? "GitHub Hook added successfully." : "GitHub Hook removed successfully.";
         
       }
     });
@@ -79,10 +76,6 @@ $(document).ready(function() {
       success: function(data, textStatus, jqXHR) {
         
         // TODO: Update DOM
-        
-        // // TODO: Provide feedback to user about the state of the hook
-        // var feedback = (data.state === "synced") ? "GitHub repos synced successfully." : "GitHub repos failed to sync.";
-        // alert(feedback);
         
       }
     });
