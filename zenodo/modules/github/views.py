@@ -196,7 +196,8 @@ def connected(resp):
 # TODO: Authenticated endpoint
 @blueprint.route('/remove-github-hook/<repo>', methods=["POST"])
 def remove_github_hook(repo):
-
+    status = {"status": False}
+    
     # Get the hook id from the database
     user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
     hook_id = user.extra_data["repos"][repo]["hook"]
@@ -205,16 +206,20 @@ def remove_github_hook(repo):
     resp = remote.delete(endpoint)
 
     if resp.status is 204:
-        # The hook has successfully been removed by GitHub, so update the user's entry
+        # The hook has successfully been removed by GitHub, update the status and DB
+        status["status"] = True
+        
         user.extra_data["repos"][repo]["hook"] = None
         user.extra_data.update()
         db.session.commit()
 
-    return json.dumps({"state": "true"})
+    return json.dumps(status)
 
 # TODO: Authenticated endpoint
 @blueprint.route('/create-github-hook/<repo>', methods=["POST"])
 def create_github_hook(repo):
+    status = {"status": False}
+    
     user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
     github_login = user.extra_data["login"]
     zenodo_token_id = Token.query.filter_by(id = user.extra_data["zenodo_token_id"]).first().access_token
@@ -237,13 +242,14 @@ def create_github_hook(repo):
     )
     
     if resp.status is 201:
-
-        # Hook was created, so update the database storing the hook id
+        # Hook was created, updated the status and database
+        status["status"] = True
+        
         user.extra_data["repos"][repo]["hook"] = resp.data["id"]
         user.extra_data.update()
         db.session.commit()
 
-    return json.dumps({"state": "true"})
+    return json.dumps(status)
 
 # TODO: Authenticated endpoint
 @blueprint.route('/sync', methods=["GET"])

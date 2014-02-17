@@ -40,9 +40,9 @@ $(document).ready(function() {
       type: "POST",
       dataType: "json",
       success: function(data, textStatus, jqXHR) {
-        
+        console.log(data);
         // TODO: Provide feedback to user about the state of the hook
-        var status = (data.state === "true") ? "fa-check" : "fa-exclamation";
+        var status = (data.status) ? "fa-check" : "fa-exclamation";
         
         // Select the correct toggle
         var el = $("[data-repo='" + repoName + "'] .hook-status");
