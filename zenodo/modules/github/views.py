@@ -295,6 +295,11 @@ def create_deposition(data):
     user_id = data.user.id
     user_email = data.email
     payload = request.json
+    user = OAuthTokens.query.filter_by( user_id = user_id ).filter_by( client_id = remote.consumer_key ).first()
+    
+    release = payload["release"]
+    repository = payload["repository"]
+    repository_name = repository["full_name"]
     
     # GitHub sends a small test payload when the hook is created. Avoid creating
     # a deposition from it.
@@ -315,8 +320,10 @@ def create_deposition(data):
     )
 
     if r.status_code is not 201:
-        # The deposition was not created. What's a good behavior here?!?!
-        # Send notification to user?
+        # # The deposition was not created. Make note in extra_data and notify user
+        # user.extra_data["repos"][repository_name]["error"] = "deposition not created"
+        # user.extra_data.update()
+        # db.session.commit()
         return json.dumps({"error": "deposition was not created"})
 
     # The deposition has been created successfully.
@@ -357,10 +364,6 @@ def create_deposition(data):
         )
 
     # Download the archive
-    release = payload["release"]
-    repository = payload["repository"]
-    repository_name = repository["full_name"]
-
     archive_url = release["zipball_url"]
     archive_name = "%(repo_name)s-%(tag_name)s.zip" % {"repo_name": repository["name"], "tag_name": release["tag_name"]}
 
