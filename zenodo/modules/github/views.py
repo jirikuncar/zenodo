@@ -29,7 +29,7 @@ from __future__ import absolute_import
 
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify, current_app
@@ -103,13 +103,25 @@ def index():
         )
 
         if r.status_code is 200:
-            # The user is authenticated and the token we have is still valid. Render GitHub setting page.
+            # The user is authenticated and the token we have is still valid. Render GitHub settings page.
             extra_data = user.extra_data
 
             # Add information to session
             session["github_token"] = (user.access_token, '')
             session["github_login"] = extra_data['login']
 
+            # Check the date of the last repo sync
+            last_sync = datetime.strptime( \
+                extra_data["repos_last_sync"], \
+                "%Y-%m-%d %H:%M:%S.%f"
+            )
+            today = datetime.now()
+            yesterday = today - timedelta(days = 1)
+            if last_sync < yesterday:
+                repos = get_repositories(user)
+                user.extra_data.update(repos)
+                db.session.commit()
+            
             context["connected"] = True
             context["repos"] = extra_data['repos']
             context["name"] = extra_data['login']
