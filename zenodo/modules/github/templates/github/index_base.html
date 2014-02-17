@@ -57,7 +57,7 @@ $(document).ready(function() {
     window.location = "/github/connect";
   });
   
-  var syncButton = $("button[name='sync-repos']");
+  var syncButton = $("span[name='sync-repos']");
   syncButton.on("click", function() {
     
     $.ajax({
@@ -85,16 +85,16 @@ $(document).ready(function() {
 <div class="row" id="file_container">
     <div class="col-sm-6 col-md-8">
       {% if connected %}
-      <h3>GitHub Projects</h3>
+      <h3>GitHub Repositories <span name="sync-repos" class="extra-small">(last synced {{last_sync}})</span></h3>
       
       <p>Apply a persistent research identifier to your GitHub projects.</p>
       
-      <button name="sync-repos">Sync Repositories</button>
-      
       {% for repo, description in repos.iteritems() %}
       <div class="row">
-        <div class="col-md-3">{{repo}}</div>
         <div class="col-md-3">
+          <h4 class="repo"><small>{{repo}}</small></h4>
+        </div>
+        <div class="col-md-3 doi-toggle">
           <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo}}">          
         </div>
         <div class="col-md-3">{{description.DOI}}</div>
@@ -102,17 +102,8 @@ $(document).ready(function() {
       </div>
       {% endfor %}
       
-      {% for repo, description in repos.iteritems() %}
-      <dl class="dl-horizontal">
-        <dt>{{repo}}</dt>
-        <dd>
-          <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo}}">
-        </dd>
-      </dl>
-      {% endfor %}
-      
       {% else %}
-      <button name="connect-to-github" type="submit" class="btn btn-default"><i class="icon-fa-github"></i> Connect to GitHub</button>
+      <button name="connect-to-github" type="submit" class="btn btn-default"><i class="fa fa-github fa-lg"></i> Connect to GitHub</button>
       {% endif %}
     </div>
     <div class="col-sm-6 col-md-4">

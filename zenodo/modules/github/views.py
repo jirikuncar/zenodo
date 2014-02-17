@@ -58,20 +58,49 @@ blueprint = Blueprint(
 
 # TODO: Place this module behind a Zenodo authorized URL
 
-# Authenticated endpoint
+def get_repositories(user):
+    """Helper method to get a list of current user's repositories from GitHub."""
+    r = remote.get("users/%(username)s/repos" % {"username": session["github_login"]})
+    
+    repos = r.data
+    def get_repo_name(repo): return repo["name"]
+    repos = map(get_repo_name, repos)
+    repos = dict( \
+        zip(repos, [{ "hook": None } for _ in xrange(len(repos))]) \
+    )
+    
+    if user is not None:
+        extra_data = user.extra_data
+    
+        # Map the existing data with the fresh dump from GitHub
+        for name, description in repos.iteritems():
+            if name in extra_data["repos"]:
+                repos[name] = extra_data["repos"][name]
+    
+    return {
+        "repos_last_sync": str(datetime.now()),
+        "repos": repos
+    }
+
 @blueprint.route('/')
 def index():
     context = { "connected": False }
 
     # Check if user has already authorized GitHub
-    user = OAuthTokens.query.filter_by( user_id = current_user.get_id() ).filter_by( client_id = remote.consumer_key ).first()
+    user = OAuthTokens.query \
+        .filter_by( user_id = current_user.get_id() ) \
+        .filter_by( client_id = remote.consumer_key ) \
+        .first()
 
     if user is not None:
 
         # The user has previously been authenticated. Check if the token is still valid.
         # GitHub requires the use of Basic Auth to query token validity. Valid responses return 200.
-        endpoint = "https://api.github.com/applications/%(client_id)s/tokens/%(access_token)s" % {"client_id": remote.consumer_key, "access_token": user.access_token}
-        r = requests.get(endpoint, auth=(remote.consumer_key, remote.consumer_secret))
+        r = requests.get(
+            "https://api.github.com/applications/%(client_id)s/tokens/%(access_token)s" % \
+            {"client_id": remote.consumer_key, "access_token": user.access_token},
+            auth=(remote.consumer_key, remote.consumer_secret)
+        )
 
         if r.status_code is 200:
             # The user is authenticated and the token we have is still valid. Render GitHub setting page.
@@ -84,6 +113,7 @@ def index():
             context["connected"] = True
             context["repos"] = extra_data['repos']
             context["name"] = extra_data['login']
+            context["last_sync"] = extra_data["repos_last_sync"]
 
     return render_template("github/index.html", **context)
 
@@ -112,7 +142,10 @@ def connected(resp):
     session['github_token'] = (github_token, '')
 
     # Check if the user has previously created a GitHub OAuth token
-    user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
+    user = OAuthTokens.query \
+        .filter_by( user_id = current_user.get_id() ) \
+        .filter_by( client_id = remote.consumer_key ) \
+        .first()
     if user is None:
 
         # Get user data
@@ -123,30 +156,24 @@ def connected(resp):
         # Create a Zenodo personal access token
         zenodo_token = Token.create_personal('github', current_user_id)
         
-        # Get repo data and format JSON
-        resp = remote.get("users/%(username)s/repos" % {"username": github_login})
-        repos = resp.data
-
-        def get_repo_name(repo): return repo["name"]
-        repos = map(get_repo_name, repos)
-        repos = dict(zip(repos, [{ "hook": None } for _ in xrange(len(repos))]))
-
+        extra_data = get_repositories(user)
+        extra_data.update({
+            "login": github_login,
+            "name": github_name,
+            "zenodo_token_id": zenodo_token.id            
+        })
+        
         # Put user's GitHub info in database
         o = OAuthTokens(
             client_id = remote.consumer_key,
             user_id = current_user.get_id(),
             access_token = github_token,
-            extra_data = {
-                "login": github_login,
-                "name": github_name,
-                "repos": repos,
-                "zenodo_token_id": zenodo_token.id
-            }
+            extra_data = extra_data
         )
         db.session.add(o)
     else:
         # User has previously connected to the GitHub client. Update the token.
-        user.access_token = token
+        user.access_token = github_token
         github_login = user.extra_data['login']
         github_name = user.extra_data['name']
 
@@ -205,7 +232,6 @@ def create_github_hook(repo):
         db.session.commit()
 
     return json.dumps({"state": "added"})
-
 
 # TODO: Authenticated endpoint
 @blueprint.route('/sync', methods=["GET"])

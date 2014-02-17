@@ -844,3 +844,21 @@ fieldset label i {
 }
 
 
+/* GitHub View Styles */
+
+h3 .extra-small {
+  font-size: 50%;
+  cursor: pointer;
+}
+
+h3 .extra-small:hover {
+  color: red;
+}
+
+h4.repo {
+  text-align: right;
+}
+
+div.doi-toggle {
+  margin: 10px 0;
+}
