@@ -42,8 +42,20 @@ $(document).ready(function() {
       success: function(data, textStatus, jqXHR) {
         
         // TODO: Provide feedback to user about the state of the hook
+        var status = (data.state === "true") ? "fa-check" : "fa-exclamation";
+        
+        // Select the correct toggle
+        var el = $("[data-repo='" + repoName + "'] .hook-status");
+        el.addClass(status);
+        el.animate({
+          opacity: 0
+        }, 2000, function() {
+          el.removeClass(status);
+          el.css('opacity', 1);
+        });
+        
+        
         var feedback = (data.state === "added") ? "GitHub Hook added successfully." : "GitHub Hook removed successfully.";
-        alert(feedback);
         
       }
     });
@@ -90,12 +102,13 @@ $(document).ready(function() {
       <p>Apply a persistent research identifier to your GitHub projects.</p>
       
       {% for repo, description in repos.iteritems() %}
-      <div class="row">
+      <div class="row" data-repo="{{repo}}">
         <div class="col-md-3">
           <h4 class="repo"><small>{{repo}}</small></h4>
         </div>
         <div class="col-md-3 doi-toggle">
-          <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo}}">          
+          <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-label-text="DOI" data-repo-name="{{repo}}">
+          <i class="hook-status fa"></i>
         </div>
         <div class="col-md-3">{{description.DOI}}</div>
         <div class="col-md-3">{{description.modified}}</div>

@@ -862,3 +862,12 @@ h4.repo {
 div.doi-toggle {
   margin: 10px 0;
 }
+
+i.hook-status {
+  color: green;
+  padding-left: 10px;
+}
+
+i.hook-status.fa-exclamation {
+  color: red;
+}

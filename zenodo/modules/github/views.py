@@ -210,7 +210,7 @@ def remove_github_hook(repo):
         user.extra_data.update()
         db.session.commit()
 
-    return json.dumps({"state": "removed"})
+    return json.dumps({"state": "true"})
 
 # TODO: Authenticated endpoint
 @blueprint.route('/create-github-hook/<repo>', methods=["POST"])
@@ -243,7 +243,7 @@ def create_github_hook(repo):
         user.extra_data.update()
         db.session.commit()
 
-    return json.dumps({"state": "added"})
+    return json.dumps({"state": "true"})
 
 # TODO: Authenticated endpoint
 @blueprint.route('/sync', methods=["GET"])
