@@ -249,29 +249,13 @@ def create_github_hook(repo):
 @blueprint.route('/sync', methods=["GET"])
 def sync_repositories():
 
-    resp = remote.get("users/%(username)s/repos" % {"username": session["github_login"]})
-    if resp.status is not 200:
-        return json.dumps({"state": "error syncing"})
-
     # Query for our current repo data
     user = OAuthTokens.query.filter_by( user_id = current_user.get_id() ).filter_by( client_id = remote.consumer_key ).first()
     if user is None:
         return json.dumps({"state": "error syncing"})
 
-    extra_data = user.extra_data
-
-    repos = resp.data
-    def get_repo_name(repo): return repo["name"]
-    repos = map(get_repo_name, repos)
-    repos = dict(zip(repos, [{ "hook": None } for _ in xrange(len(repos))]))
-
-    # Map the existing data with the fresh dump from GitHub
-    for name, description in repos.iteritems():
-        if name in extra_data["repos"]:
-            repos[name] = extra_data["repos"][name]
-
-    user.extra_data["repos"] = repos
-    user.extra_data.update()
+    repos = get_repositories(user)
+    user.extra_data.update(repos)
     db.session.commit()
 
     return redirect( url_for('.index') )
