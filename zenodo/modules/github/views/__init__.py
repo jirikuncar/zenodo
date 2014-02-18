@@ -20,5 +20,12 @@
 ## granted to it by virtue of its status as an Intergovernmental Organization
 ## or submit itself to any jurisdiction.
 
-ZENODO_API_KEY = ""
-GITHUB_WEBHOOK_ID = "github"
+from __future__ import absolute_import
+
+from .settings import blueprint as settings_bp
+from .github import blueprint as github_bp
+
+blueprints = [
+    settings_bp,
+    github_bp,
+]

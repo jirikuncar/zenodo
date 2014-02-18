@@ -90,6 +90,10 @@ COMMUNITIES_PORTALBOXES_PROVISIONAL = [
     'communities/portalbox_provisional.html',
 ]
 
+WEBHOOKS_DEBUG_RECEIVER_URLS = {
+    'github': 'http://github.zenodo.ultrahook.com?access_token=%(token)s',
+}
+
 RECORDS_BREADCRUMB_TITLE_KEY = 'title'
 
 # Debug toolbar configuration
