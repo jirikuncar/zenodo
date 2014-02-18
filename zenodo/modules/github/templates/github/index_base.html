@@ -115,11 +115,15 @@ $(document).ready(function() {
           <td>
             <div class="doi-toggle">
               {% if description.errors %}
-              <a href="https://zenodo-dev.cern.ch/deposit/{{description.deposition_id}}/">
+              <a href="deposit/{{description.deposition_id}}/">
                 <i
                   class="error fa fa-exclamation-circle"
                   data-toggle="tooltip"
+                  {% if description.errors[0].code %}
+                  title="Missing metadata."
+                  {% else %}
                   title="{{description.errors | map(attribute='message') | join(',' )}}"
+                  {% endif %}
                 ></i>
               </a>
               {% endif %}
