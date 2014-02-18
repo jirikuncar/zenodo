@@ -46,9 +46,12 @@ from .models import OAuthTokens
 ZENODO_API = "https://zenodo-dev.cern.ch/api"
 
 
-def create_empty_deposition(api_key, user):
+def create_empty_deposition(api_key, payload, user):
     errors = []
     headers = {"Content-Type": "application/json"}
+    
+    repository = payload["repository"]
+    repository_name = repository["full_name"]
     
     r = requests.post(
         "%(api)s/deposit/depositions?apikey=%(api_key)s" % {"api": ZENODO_API, "api_key": api_key},
@@ -200,10 +203,15 @@ def publish_deposition(api_key, payload, user, errors, deposition_id, user_email
         if r.status_code == 202:
             user.extra_data["repos"][repository_name]["doi"] = r.json()["doi"]
             user.extra_data["repos"][repository_name]["modified"] = r.json()["modified"]
+            del user.extra_data["repos"][repository_name]["errors"]
+            user.extra_data.update()
+        
+            db.session.commit()
+            
             user.extra_data.update()
             db.session.commit()
             
-            return { "response": r }
+            return True
         
         errors.append(
             {"message": "Deposition could not be published to Zenodo."}
@@ -214,7 +222,7 @@ def publish_deposition(api_key, payload, user, errors, deposition_id, user_email
     user.extra_data.update()
     db.session.commit()
     
-    return { "response": r }
+    return False
 
 
 # TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
@@ -223,8 +231,6 @@ def publish_deposition(api_key, payload, user, errors, deposition_id, user_email
 def create_deposition(event_state):
     ZENODO_API_KEY = current_app.config["ZENODO_API_KEY"]
     remote = oauth.remote_apps['github']
-    
-    print "CREATE_DEPOSITION"
     
     e = Event()
     e.__setstate__(event_state)
@@ -246,12 +252,11 @@ def create_deposition(event_state):
     #
     #   Step 1: Create an empty deposition
     #
-    status = create_empty_deposition(ZENODO_API_KEY, user)
-    print "STATUS", status
+    status = create_empty_deposition(ZENODO_API_KEY, payload, user)
     
     if status["response"].status_code != 201:
         return json.dumps(
-            {"errors": status.errors}
+            {"errors": status["errors"]}
         )
     errors = errors + status["errors"]
     
@@ -273,8 +278,9 @@ def create_deposition(event_state):
     #   Step 4: Publish to Zenodo for wicked software preservation!
     #
     
+    # TODO: Might need to handle other response codes in publish_deposition ...
     status = publish_deposition(ZENODO_API_KEY, payload, user, errors, deposition_id, user_email)
-    if status["response"].status_code == 202:
+    if status:
         msg = {"state": "deposition successfully published"}
     else:
         msg = {"state": "deposition not successful"}
