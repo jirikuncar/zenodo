@@ -43,116 +43,71 @@ from zenodo.ext.oauth import oauth
 
 from .models import OAuthTokens
 
+ZENODO_API = "https://zenodo-dev.cern.ch/api"
 
-# TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
-# TODO: Move to celery task
-# TODO: Break out into multiple functions
-# TODO: Ensure duplicate releases are not created.
-#@celery.task(ignore_result=True)
-def create_deposition(event_state):
-    try:
-        remote = oauth.remote_apps['github']
-    
-        e = Event()
-        e.__setstate__(event_state)
 
-        user_id = e.user_id
-        user_email = User.query.filter_by(id=user_id).first().email
-        payload = e.payload
-        user = OAuthTokens.query.filter_by(user_id=user_id).filter_by(
-            client_id=remote.consumer_key
-        ).first()
+def create_empty_deposition(api_key, user):
+    errors = []
+    headers = {"Content-Type": "application/json"}
     
-        # GitHub sends a small test payload when the hook is created. Avoid creating
-        # a deposition from it.
-        if 'hook_id' in payload:
-            return json.dumps({"state": "hook-added"})
+    r = requests.post(
+        "%(api)s/deposit/depositions?apikey=%(api_key)s" % {"api": ZENODO_API, "api_key": api_key},
+        data="{}",
+        headers=headers,
+        verify=False
+    )
+    
+    # Check if the deposition was created. When errors, make note on the extra_data and notify owner.
+    # TODO: Email notification to owner
+    if r.status_code != 201:
+        
+        # The deposition was not created. Make note in extra_data and notify user
+        errors.append(
+            {"message": "Deposition was not created."}
+        )
+        user.extra_data["repos"][repository_name]["errors"] = errors
+        user.extra_data.update()
+        
+        db.session.commit()
+    
+    return {
+        "response": r,
+        "errors": errors
+    }
+    
 
-        release = payload["release"]
-        repository = payload["repository"]
-        repository_name = repository["full_name"]
-        errors = []
+def append_deposition_metadata(api_key, payload, user_email, deposition_id):
+    errors = []
+    headers = {"Content-Type": "application/json"}
+    
+    # At this point we need to get metadata. Since we require the user to include a .zenodo.json file in the repository,
+    # we'll fetch it here, or prompt the user to supply metadata via an email notification.
 
-        api_key = current_app.config["ZENODO_API_KEY"]
-        zenodo_api = "https://zenodo-dev.cern.ch/api"
-    
-        #
-        #   Step 1: Create an empty deposition
-        #
-    
-        headers = {"Content-Type": "application/json"}
-        r = requests.post(
-            "%(api)s/deposit/depositions?apikey=%(api_key)s" % {"api": zenodo_api, "api_key": api_key},
-            data="{}",
+    # Format the raw url from the release payload
+    zenodo_json_path = payload["release"]["html_url"]
+    zenodo_json_path = zenodo_json_path.replace("github.com", "raw.github.com")
+    zenodo_json_path = zenodo_json_path.replace("releases/tag/", '')
+    zenodo_json_path += "/.zenodo.json"
+
+    # Get the .zenodo.json file
+    r = requests.get(zenodo_json_path)
+    if r.status_code == 200:
+
+        zenodo_metadata = { "metadata": json.loads(r.text) }
+        r = requests.put(
+            "%(api)s/deposit/depositions/%(deposition_id)s?apikey=%(api_key)s" \
+            % {"api": ZENODO_API, "deposition_id": deposition_id, "api_key": api_key},
+            data=json.dumps(zenodo_metadata),
             headers=headers,
             verify=False
         )
-    
-        # Check if the deposition was created. When errors, make note on the extra_data and notify owner.
-        # TODO: Email notification to owner
-        if r.status_code != 201:
         
-            # The deposition was not created. Make note in extra_data and notify user
-            errors.append({"message": "Deposition was not created."})
-            user.extra_data["repos"][repository_name]["errors"] = errors
-            user.extra_data.update()
-        
-            db.session.commit()
-            return json.dumps( {"errors": errors} )
-    
-        #
-        #   Step 2: Get and attach metadata to deposition
-        #
-    
-        # The deposition has been created successfully.
-        deposition_id = r.json()['id']
-    
-        # At this point we need to get metadata. Since we require the user to include a .zenodo.json file in the repository,
-        # we'll fetch it here, or prompt the user to supply metadata via an email notification.
-
-        # Format the raw url from the release payload
-        zenodo_json_path = payload["release"]["html_url"]
-        zenodo_json_path = zenodo_json_path.replace("github.com", "raw.github.com")
-        zenodo_json_path = zenodo_json_path.replace("releases/tag/", '')
-        zenodo_json_path += "/.zenodo.json"
-
-        # Get the .zenodo.json file
-        r = requests.get(zenodo_json_path)
-        if r.status_code == 200:
-
-            zenodo_metadata = { "metadata": json.loads(r.text) }
-            r = requests.put(
-                "%(api)s/deposit/depositions/%(deposition_id)s?apikey=%(api_key)s" \
-                % {"api": zenodo_api, "deposition_id": deposition_id, "api_key": api_key},
-                data=json.dumps(zenodo_metadata),
-                headers=headers,
-                verify=False
-            )
-        
-            # The metadata file contains errors
-            if r.status_code == 400:
+        # The metadata file contains errors
+        if r.status_code == 400:
             
-                # Metadata was not attached due to malformed .zenodo.json file. Append to errors and notify via email.
-                errors = errors + r.json()["errors"]
+            # Metadata was not attached due to malformed .zenodo.json file. Append to errors and notify via email.
+            errors = errors + r.json()["errors"]
             
-                send_email(
-                    CFG_SITE_ADMIN_EMAIL,
-                    user_email,
-                    subject="Metadata Needed For Deposition",
-                    content=render_template_to_string(
-                        "github/email_zenodo_json.html"
-                    )
-                )
-
-        else:
-        
-            # There's no zenodo.json file in the repository. Append to errors and
-            # notify owner for additional metadata.
-            errors.append(
-                {"message": "Missing .zenodo.json metadata file from repository."}
-            )
-        
-            # Notify user when there is no .zenodo.json file in the repository.
             send_email(
                 CFG_SITE_ADMIN_EMAIL,
                 user_email,
@@ -161,71 +116,168 @@ def create_deposition(event_state):
                     "github/email_zenodo_json.html"
                 )
             )
-    
-        #
-        #   Step 3: Get the archive file
-        #
-    
-        # Download the archive
-        archive_url = release["zipball_url"]
-        archive_name = "%(repo_name)s-%(tag_name)s.zip" % {"repo_name": repository["name"], "tag_name": release["tag_name"]}
 
-        r = requests.get(archive_url, stream=True)
-        if r.status_code == 200:
-
-            # Append the file to the deposition
-            data = {'filename': archive_name}
-            files = {"file": r.raw}
+    else:
         
-            r = requests.post(
-                "%(api)s/deposit/depositions/%(deposition_id)s/files?apikey=%(api_key)s" % \
-                {"api": zenodo_api, "deposition_id": deposition_id, "api_key": api_key},
-                data=data,
-                files=files,
-                verify=False
+        # There's no zenodo.json file in the repository. Append to errors and
+        # notify owner for additional metadata.
+        errors.append(
+            {"message": "Missing .zenodo.json metadata file from repository."}
+        )
+        
+        # Notify user when there is no .zenodo.json file in the repository.
+        send_email(
+            CFG_SITE_ADMIN_EMAIL,
+            user_email,
+            subject="Metadata Needed For Deposition",
+            content=render_template_to_string(
+                "github/email_zenodo_json.html"
             )
+        )
+    
+    return {
+        "response": r,
+        "errors": errors
+    }
+
+# TODO: Notify user via email
+def append_deposition_file(api_key, payload, deposition_id, user_email):
+    errors = []
+    headers = {"Content-Type": "application/json"}
+    
+    release = payload["release"]
+    repository = payload["repository"]
+    repository_name = repository["full_name"]
+    
+    # Download the archive
+    archive_url = release["zipball_url"]
+    archive_name = "%(repo_name)s-%(tag_name)s.zip" % {"repo_name": repository["name"], "tag_name": release["tag_name"]}
+
+    r = requests.get(archive_url, stream=True)
+    if r.status_code == 200:
+
+        # Append the file to the deposition
+        data = {'filename': archive_name}
+        files = {"file": r.raw}
         
-            if r.status_code != 201:
-                errors.append(
-                    {"message": "Could not upload the archive to Zenodo."}
-                )
-        else:
+        r = requests.post(
+            "%(api)s/deposit/depositions/%(deposition_id)s/files?apikey=%(api_key)s" % \
+            {"api": ZENODO_API, "deposition_id": deposition_id, "api_key": api_key},
+            data=data,
+            files=files,
+            verify=False
+        )
         
-            # There was trouble getting the archive from GitHub
+        if r.status_code != 201:
             errors.append(
-                {"message": "Could not retrieve the archive from GitHub."}
+                {"message": "Could not upload the archive to Zenodo."}
             )
-    
-        #
-        #   Step 4: Publish to Zenodo for wicked software preservation!
-        #
-    
-        if len(errors) == 0:
+    else:
         
-            r = requests.post(
-                "%(api)s/deposit/depositions/%(deposition_id)s/actions/publish?apikey=%(api_key)s" % \
-                {"api": zenodo_api, "deposition_id": deposition_id, "api_key": api_key},
-                verify=False
-            )
+        # There was trouble getting the archive from GitHub
+        errors.append(
+            {"message": "Could not retrieve the archive from GitHub."}
+        )
+    
+    return {
+        "response": r,
+        "errors": errors
+    }
+
+def publish_deposition(api_key, payload, user, errors, deposition_id, user_email):
+    
+    repository = payload["repository"]
+    repository_name = repository["full_name"]
+    
+    if len(errors) == 0:
         
-            if r.status_code == 202:
-                user.extra_data["repos"][repository_name]["doi"] = r.json()["doi"]
-                user.extra_data["repos"][repository_name]["modified"] = r.json()["modified"]
-                user.extra_data.update()
-                db.session.commit()
+        r = requests.post(
+            "%(api)s/deposit/depositions/%(deposition_id)s/actions/publish?apikey=%(api_key)s" % \
+            {"api": ZENODO_API, "deposition_id": deposition_id, "api_key": api_key},
+            verify=False
+        )
+        
+        if r.status_code == 202:
+            user.extra_data["repos"][repository_name]["doi"] = r.json()["doi"]
+            user.extra_data["repos"][repository_name]["modified"] = r.json()["modified"]
+            user.extra_data.update()
+            db.session.commit()
             
-                return json.dumps({"state": "deposition added successfully"})
+            return { "response": r }
         
-            errors.append(
-                {"message": "Deposition could not be published to Zenodo."}
-            )
+        errors.append(
+            {"message": "Deposition could not be published to Zenodo."}
+        )
 
-        # Add to extra_data
-        user.extra_data["repos"][repository_name]["errors"] = errors
-        user.extra_data.update()
-        db.session.commit()
+    # Add to extra_data
+    user.extra_data["repos"][repository_name]["errors"] = errors
+    user.extra_data.update()
+    db.session.commit()
+    
+    return { "response": r }
 
-        return json.dumps({"state": "deposition not successful"})
-    except Exception as e:
-        import traceback
-        current_app.logger.error(traceback.format_exc(e))
+
+# TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
+# TODO: Break out into multiple functions
+# TODO: Ensure duplicate releases are not created.
+def create_deposition(event_state):
+    ZENODO_API_KEY = current_app.config["ZENODO_API_KEY"]
+    remote = oauth.remote_apps['github']
+    
+    print "CREATE_DEPOSITION"
+    
+    e = Event()
+    e.__setstate__(event_state)
+
+    user_id = e.user_id
+    user_email = User.query.filter_by(id=user_id).first().email
+    payload = e.payload
+    user = OAuthTokens.query.filter_by(user_id=user_id).filter_by(
+        client_id=remote.consumer_key
+    ).first()
+    
+    # GitHub sends a small test payload when the hook is created. Avoid creating
+    # a deposition from it.
+    if 'hook_id' in payload:
+        return json.dumps({"state": "hook-added"})
+    
+    errors = []
+    
+    #
+    #   Step 1: Create an empty deposition
+    #
+    status = create_empty_deposition(ZENODO_API_KEY, user)
+    print "STATUS", status
+    
+    if status["response"].status_code != 201:
+        return json.dumps(
+            {"errors": status.errors}
+        )
+    errors = errors + status["errors"]
+    
+    #
+    #   Step 2: Get and attach metadata to deposition
+    #
+    # The deposition has successfully been created.
+    deposition_id = status["response"].json()["id"]
+    status = append_deposition_metadata(ZENODO_API_KEY, payload, user_email, deposition_id)
+    errors = errors + status["errors"]
+    
+    #
+    #   Step 3: Get the archive file
+    #
+    status = append_deposition_file(ZENODO_API_KEY, payload, deposition_id, user_email)
+    errors = errors + status["errors"]
+    
+    #
+    #   Step 4: Publish to Zenodo for wicked software preservation!
+    #
+    
+    status = publish_deposition(ZENODO_API_KEY, payload, user, errors, deposition_id, user_email)
+    if status["response"].status_code == 202:
+        msg = {"state": "deposition successfully published"}
+    else:
+        msg = {"state": "deposition not successful"}
+    
+    return json.dumps(msg)
+
