@@ -26,3 +26,4 @@ Pillow==1.7.8
 git+https://github.com/lepture/flask-oauthlib.git#egg=Flask-OAuthlib
 altmetric
 beautifulsoup4
+humanize==0.5

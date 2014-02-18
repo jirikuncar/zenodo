@@ -12,7 +12,7 @@ def setup_app(app):
     CLIENT_SECRET = app.config['ZENODO_GITHUB_CLIENT_SECRET']
     ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
     AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
-    OAUTH_SCOPE = {"scope": "user,public_repo,admin:repo_hook"}
+    OAUTH_SCOPE = {"scope": "user:email,admin:repo_hook"}
 
     oauth.init_app(app)
 

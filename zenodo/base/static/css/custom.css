@@ -844,3 +844,30 @@ fieldset label i {
 }
 
 
+/* GitHub View Styles */
+
+div .extra-small {
+  font-size: 50%;
+  cursor: pointer;
+}
+
+div .extra-small:hover {
+  color: red;
+}
+
+h4.repo {
+}
+
+.doi-toggle {
+  margin: 10px 0;
+  text-align: right;
+}
+
+i.hook-status {
+  color: green;
+  padding-left: 10px;
+}
+
+i.hook-status.fa-exclamation {
+  color: red;
+}

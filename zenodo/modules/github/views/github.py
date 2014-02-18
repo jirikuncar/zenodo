@@ -29,17 +29,23 @@ from __future__ import absolute_import
 
 import os
 import json
-from datetime import datetime
+import pytz
+import dateutil
+from dateutil.parser import parse
+from datetime import datetime, timedelta
 
+import humanize
 import requests
 from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify, current_app
 from flask.ext.login import current_user
 
 from invenio.ext.sqlalchemy import db
 from invenio.ext.email import send_email
+from invenio.modules.oauth2server.provider import oauth2
 from invenio.config import CFG_SITE_ADMIN_EMAIL, CFG_SITE_NAME
 from invenio.ext.template import render_template_to_string
 from invenio.modules.accounts.models import User
+from invenio.modules.oauth2server.models import Token
 from zenodo.ext.oauth import oauth
 
 from .models import OAuthTokens
@@ -56,34 +62,85 @@ blueprint = Blueprint(
 
 # TODO: Place this module behind a Zenodo authorized URL
 
-# Authenticated endpoint
+
+@blueprint.app_template_filter('naturaltime')
+def naturaltime(val):
+    val = parse(val)
+    now = datetime.utcnow().replace(tzinfo = pytz.utc)
+    
+    return humanize.naturaltime(now - val)
+
+def get_repositories(user):
+    """Helper method to get a list of current user's repositories from GitHub."""
+    r = remote.get("users/%(username)s/repos?type=owner&sort=full_name" % {"username": session["github_login"]})
+    
+    repo_data = r.data
+    def get_repo_name(repo): return repo["full_name"]
+    def get_repo_data(repo): return { "hook": None, "description": repo["description"] }
+    
+    repo_names = map(get_repo_name, repo_data)
+    repo_data = map(get_repo_data, repo_data)
+    repos = dict( \
+        zip(repo_names, repo_data) \
+    )
+    
+    if user is not None:
+        extra_data = user.extra_data
+    
+        # Map the existing data with the fresh dump from GitHub
+        for name, description in repos.iteritems():
+            if name in extra_data["repos"]:
+                repos[name] = extra_data["repos"][name]
+    
+    return {
+        "repos_last_sync": str(datetime.now()),
+        "repos": repos
+    }
+
 @blueprint.route('/')
 def index():
     context = { "connected": False }
 
     # Check if user has already authorized GitHub
-    user = OAuthTokens.query.filter_by( user_id = current_user.get_id() ).filter_by( client_id = remote.consumer_key ).first()
+    user = OAuthTokens.query \
+        .filter_by( user_id = current_user.get_id() ) \
+        .filter_by( client_id = remote.consumer_key ) \
+        .first()
 
     if user is not None:
 
         # The user has previously been authenticated. Check if the token is still valid.
         # GitHub requires the use of Basic Auth to query token validity. Valid responses return 200.
-        endpoint = "https://api.github.com/applications/%(client_id)s/tokens/%(access_token)s" % {"client_id": remote.consumer_key, "access_token": user.access_token}
-        r = requests.get(endpoint, auth=(remote.consumer_key, remote.consumer_secret))
+        r = requests.get(
+            "https://api.github.com/applications/%(client_id)s/tokens/%(access_token)s" % \
+            {"client_id": remote.consumer_key, "access_token": user.access_token},
+            auth=(remote.consumer_key, remote.consumer_secret)
+        )
 
         if r.status_code is 200:
-            # The user is authenticated and the token we have is still valid. Render GitHub setting page.
+            # The user is authenticated and the token we have is still valid. Render GitHub settings page.
             extra_data = user.extra_data
 
             # Add information to session
             session["github_token"] = (user.access_token, '')
             session["github_login"] = extra_data['login']
 
+            # Check the date of the last repo sync
+            last_sync = datetime.strptime( \
+                extra_data["repos_last_sync"], \
+                "%Y-%m-%d %H:%M:%S.%f"
+            )
+            today = datetime.now()
+            yesterday = today - timedelta(days = 1)
+            if last_sync < yesterday:
+                repos = get_repositories(user)
+                user.extra_data.update(repos)
+                db.session.commit()
+            
             context["connected"] = True
             context["repos"] = extra_data['repos']
             context["name"] = extra_data['login']
-
-            print "EXTRA_DATA", extra_data
+            context["last_sync"] = humanize.naturaltime(datetime.now() - last_sync)
 
     return render_template("github/index.html", **context)
 
@@ -98,6 +155,7 @@ def connect():
 @blueprint.route('/connected')
 @remote.authorized_handler
 def connected(resp):
+    current_user_id = current_user.get_id()
 
     # TODO: Better error handling. If GitHub auth fails, we'll get a Bad Request (400)
     if resp is None:
@@ -106,123 +164,123 @@ def connected(resp):
             request.args['error_description']
         )
 
-    # Store the access token on the session
-    token = resp['access_token']
-    session['github_token'] = (token, '')
+    # Store the GitHub access token on the session
+    github_token = resp['access_token']
+    session['github_token'] = (github_token, '')
 
     # Check if the user has previously created a GitHub OAuth token
-    user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
+    user = OAuthTokens.query \
+        .filter_by( user_id = current_user.get_id() ) \
+        .filter_by( client_id = remote.consumer_key ) \
+        .first()
     if user is None:
 
         # Get user data
         resp = remote.get('user')
         github_login = resp.data['login']
         github_name = resp.data['name']
-
-        # Get repo data and format JSON
-        resp = remote.get("users/%(username)s/repos" % {"username": github_login})
-        repos = resp.data
-
-        def get_repo_name(repo): return repo["name"]
-        repos = map(get_repo_name, repos)
-        repos = dict(zip(repos, [{ "hook": None } for _ in xrange(len(repos))]))
-
+        
+        # Create a Zenodo personal access token
+        zenodo_token = Token.create_personal('github', current_user_id)
+        
+        extra_data = get_repositories(user)
+        extra_data.update({
+            "login": github_login,
+            "name": github_name,
+            "zenodo_token_id": zenodo_token.id            
+        })
+        
         # Put user's GitHub info in database
         o = OAuthTokens(
             client_id = remote.consumer_key,
             user_id = current_user.get_id(),
-            access_token = token,
-            extra_data = {"login": github_login, "name": github_name, "repos": repos}
+            access_token = github_token,
+            extra_data = extra_data
         )
         db.session.add(o)
     else:
         # User has previously connected to the GitHub client. Update the token.
-        user.access_token = token
+        user.access_token = github_token
         github_login = user.extra_data['login']
         github_name = user.extra_data['name']
 
     db.session.commit()
-    session["github_login"] = github_login
-    session["github_name"] = github_name
 
     return redirect( url_for('.index') )
 
 # TODO: Authenticated endpoint
-@blueprint.route('/remove-github-hook/<repo>', methods=["POST"])
-def remove_github_hook(repo):
-
+@blueprint.route('/remove-github-hook', methods=["POST"])
+def remove_github_hook():
+    status = {"status": False}
+    repo = request.json["repo"]
+    
     # Get the hook id from the database
     user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
     hook_id = user.extra_data["repos"][repo]["hook"]
 
-    endpoint = "repos/%(owner)s/%(repo)s/hooks/%(hook_id)s" % {"owner": session["github_login"], "repo": repo, "hook_id": hook_id}
-    resp = remote.delete(endpoint)
+    resp = remote.delete(
+        "repos/%(full_name)s/hooks/%(hook_id)s" % {"full_name": repo, "hook_id": hook_id},
+    )
 
     if resp.status is 204:
-        # The hook has successfully been removed by GitHub, so update the user's entry
+        # The hook has successfully been removed by GitHub, update the status and DB
+        status["status"] = True
+        
         user.extra_data["repos"][repo]["hook"] = None
         user.extra_data.update()
         db.session.commit()
 
-    return json.dumps({"state": "removed"})
+    return json.dumps(status)
 
 # TODO: Authenticated endpoint
-@blueprint.route('/create-github-hook/<repo>', methods=["POST"])
-def create_github_hook(repo):
-    endpoint = "repos/%(owner)s/%(repo)s/hooks" % {"owner": session["github_login"], "repo": repo}
-
-    # TODO: Use Zenodo API
+@blueprint.route('/create-github-hook', methods=["POST"])
+def create_github_hook():
+    status = {"status": False}
+    repo = request.json["repo"]
+    
+    user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
+    github_login = user.extra_data["login"]
+    zenodo_token_id = Token.query.filter_by(id = user.extra_data["zenodo_token_id"]).first().access_token
+    
+    # TODO: Use Zenodo endpoint instead of Ultrahook!!!
     data = {
         "name": "web",
         "config": {
-            # TODO: Update to pass in token instead of Zenodo user id
-            "url": "http://github.zenodo.ultrahook.com?token=%(token)s" % {"token": current_user.get_id()},
+            "url": "http://github.zenodo.ultrahook.com?access_token=%(token)s" % {"token": zenodo_token_id},
             "content_type": "json"
         },
         "events": ["release"],
         "active": True
     }
-    print "HERE", data
 
-    resp = remote.post(endpoint, format='json', data=data)
+    resp = remote.post(
+        "repos/%(full_name)s/hooks" % {"full_name": repo},
+        format='json',
+        data=data
+    )
+    
+    
     if resp.status is 201:
-
-        # Hook was created, so update the database storing the hook id
-        user = OAuthTokens.query.filter_by(user_id = current_user.get_id()).filter_by(client_id = remote.consumer_key).first()
+        # Hook was created, updated the status and database
+        status["status"] = True
+        
         user.extra_data["repos"][repo]["hook"] = resp.data["id"]
         user.extra_data.update()
         db.session.commit()
 
-    return json.dumps({"state": "added"})
-
+    return json.dumps(status)
 
 # TODO: Authenticated endpoint
 @blueprint.route('/sync', methods=["GET"])
 def sync_repositories():
-
-    resp = remote.get("users/%(username)s/repos" % {"username": session["github_login"]})
-    if resp.status is not 200:
-        return json.dumps({"state": "error syncing"})
 
     # Query for our current repo data
     user = OAuthTokens.query.filter_by( user_id = current_user.get_id() ).filter_by( client_id = remote.consumer_key ).first()
     if user is None:
         return json.dumps({"state": "error syncing"})
 
-    extra_data = user.extra_data
-
-    repos = resp.data
-    def get_repo_name(repo): return repo["name"]
-    repos = map(get_repo_name, repos)
-    repos = dict(zip(repos, [{ "hook": None } for _ in xrange(len(repos))]))
-
-    # Map the existing data with the fresh dump from GitHub
-    for name, description in repos.iteritems():
-        if name in extra_data["repos"]:
-            repos[name] = extra_data["repos"][name]
-
-    user.extra_data["repos"] = repos
-    user.extra_data.update()
+    repos = get_repositories(user)
+    user.extra_data.update(repos)
     db.session.commit()
 
     return redirect( url_for('.index') )
@@ -230,10 +288,19 @@ def sync_repositories():
 # TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
 # TODO: Move to celery task
 # TODO: Break out into multiple functions
+# TODO: Ensure duplicate releases are not created.
 @blueprint.route('/create-deposition', methods=["POST"])
-def create_deposition():
+@oauth2.require_oauth()
+def create_deposition(data):
+    user_id = data.user.id
+    user_email = data.email
     payload = request.json
-
+    user = OAuthTokens.query.filter_by( user_id = user_id ).filter_by( client_id = remote.consumer_key ).first()
+    
+    release = payload["release"]
+    repository = payload["repository"]
+    repository_name = repository["full_name"]
+    
     # GitHub sends a small test payload when the hook is created. Avoid creating
     # a deposition from it.
     if 'hook_id' in payload:
@@ -241,7 +308,7 @@ def create_deposition():
 
     api_key = current_app.config["ZENODO_API_KEY"]
     zenodo_api = "https://zenodo-dev.cern.ch/api"
-    token = request.args.get('token') # TODO: apply authorization decorator above
+    zenodo_token = request.args.get('access_token')
 
     # First create an empty deposition and attach metadata later.
     headers = {"Content-Type": "application/json"}
@@ -253,14 +320,16 @@ def create_deposition():
     )
 
     if r.status_code is not 201:
-        # The deposition was not created. What's a good behavior here?!?!
-        # Send notification to user?
+        # # The deposition was not created. Make note in extra_data and notify user
+        # user.extra_data["repos"][repository_name]["error"] = "deposition not created"
+        # user.extra_data.update()
+        # db.session.commit()
         return json.dumps({"error": "deposition was not created"})
 
     # The deposition has been created successfully.
     deposition_id = r.json()['id']
 
-    # At this point we need to get metadata. Since we require the user to include a zenodo.json file in the repository,
+    # At this point we need to get metadata. Since we require the user to include a .zenodo.json file in the repository,
     # we'll fetch it here, or prompt the user to supply metadata via an email notification.
 
     # Format the raw url from the release payload
@@ -269,7 +338,7 @@ def create_deposition():
     zenodo_json_path = zenodo_json_path.replace("releases/tag/", '')
     zenodo_json_path += "/.zenodo.json"
 
-    # Get the zenodo.json file
+    # Get the .zenodo.json file
     r = requests.get(zenodo_json_path)
     if r.status_code is 200:
 
@@ -284,15 +353,10 @@ def create_deposition():
 
     # TODO: Handle other status codes
     else:
-        # Looks like there is no zenodo.json file in the repository
-        # TODO: Notify user via email to offer needed metadata before Zenodo
-        # issues a DOI
-
-        # TODO: Query the user based on the OAuth token, get the email address and use in send_mail
-        email = User.query.filter_by(id = token).first().email
+        # Notify user when there is no .zenodo.json file in the repository.
         send_email(
             CFG_SITE_ADMIN_EMAIL,
-            email,
+            user_email,
             subject="Metadata Needed For Deposition",
             content=render_template_to_string(
                 "github/email_zenodo_json.html"
@@ -300,10 +364,6 @@ def create_deposition():
         )
 
     # Download the archive
-    release = payload["release"]
-    repository = payload["repository"]
-    repository_name = repository["name"]
-
     archive_url = release["zipball_url"]
     archive_name = "%(repo_name)s-%(tag_name)s.zip" % {"repo_name": repository["name"], "tag_name": release["tag_name"]}
 
@@ -335,7 +395,7 @@ def create_deposition():
     )
 
     # Add to extra_data
-    user = OAuthTokens.query.filter_by( user_id = token ).filter_by( client_id = remote.consumer_key ).first()
+    user = OAuthTokens.query.filter_by( user_id = user_id ).filter_by( client_id = remote.consumer_key ).first()
     user.extra_data["repos"][repository_name]["DOI"] = r.json()["doi"]
     user.extra_data["repos"][repository_name]["modified"] = r.json()["modified"]
     user.extra_data.update()
