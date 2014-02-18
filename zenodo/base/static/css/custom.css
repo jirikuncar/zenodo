@@ -871,3 +871,7 @@ i.hook-status {
 i.hook-status.fa-exclamation {
   color: red;
 }
+
+i.error {
+  color: red;
+}

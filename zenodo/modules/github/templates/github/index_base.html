@@ -108,6 +108,9 @@ $(document).ready(function() {
           </td>
           <td>
             <div class="doi-toggle">
+              {% if description.errors %}
+              <i class="error fa fa-exclamation-circle">{{description.errors}}</i>
+              {% endif %}
               <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-repo-name="{{repo}}">
               <i class="hook-status fa"></i>
               <br/>
