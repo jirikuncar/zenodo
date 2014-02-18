@@ -79,7 +79,7 @@ def create_empty_deposition(api_key, payload, user):
     }
     
 
-def append_deposition_metadata(api_key, payload, user_email, deposition_id):
+def append_deposition_metadata(api_key, payload, user, user_email, deposition_id):
     errors = []
     headers = {"Content-Type": "application/json"}
     
@@ -91,12 +91,24 @@ def append_deposition_metadata(api_key, payload, user_email, deposition_id):
     zenodo_json_path = zenodo_json_path.replace("github.com", "raw.github.com")
     zenodo_json_path = zenodo_json_path.replace("releases/tag/", '')
     zenodo_json_path += "/.zenodo.json"
-
+    
+    release = payload["release"]
+    repository = payload["repository"]
+    repository_name = repository["full_name"]
+    
     # Get the .zenodo.json file
     r = requests.get(zenodo_json_path)
     if r.status_code == 200:
-
-        zenodo_metadata = { "metadata": json.loads(r.text) }
+        metadata = json.loads(r.text)
+        
+        previous_doi = user.extra_data["repos"][repository_name].get("doi")
+        if previous_doi:
+            metadata["related_identifiers"] = [{
+                "relation": "isSupplementTo",
+                "identifier": previous_doi
+            }]
+        
+        zenodo_metadata = { "metadata": metadata }
         r = requests.put(
             "%(api)s/deposit/depositions/%(deposition_id)s?apikey=%(api_key)s" \
             % {"api": ZENODO_API, "deposition_id": deposition_id, "api_key": api_key},
@@ -228,7 +240,6 @@ def publish_deposition(api_key, payload, user, errors, deposition_id, user_email
 
 
 # TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
-# TODO: Break out into multiple functions
 # TODO: Ensure duplicate releases are not created.
 def create_deposition(event_state):
     ZENODO_API_KEY = current_app.config["ZENODO_API_KEY"]
@@ -267,7 +278,7 @@ def create_deposition(event_state):
     #
     # The deposition has successfully been created.
     deposition_id = status["response"].json()["id"]
-    status = append_deposition_metadata(ZENODO_API_KEY, payload, user_email, deposition_id)
+    status = append_deposition_metadata(ZENODO_API_KEY, payload, user, user_email, deposition_id)
     errors = errors + status["errors"]
     
     #
