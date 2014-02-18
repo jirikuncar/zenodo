@@ -17,7 +17,7 @@
 ## 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 #}
 
-{% extends "page.html" %}
+{% extends "accounts/settings.html" %}
 
 {% block title %}{% endblock %}
 
@@ -26,15 +26,15 @@
 {{super()}}
 <script type="text/javascript">
 $(document).ready(function() {
-  
+
   // Initialize bootstrap switches
   var doiSwitches = $("input[data-repo-name]").bootstrapSwitch();
   doiSwitches.on("switchChange", function(e, data) {
     var state = data.value;
     var repoName = data.el[0].dataset.repoName;
-    
+
     console.log("HERE", repoName);
-    
+
     // Post to Zenodo
     var endpoint = state ? "create-github-hook/" : "remove-github-hook/"
     console.log("POSTING to ", endpoint);
@@ -48,7 +48,7 @@ $(document).ready(function() {
         console.log(data);
         // TODO: Provide feedback to user about the state of the hook
         var status = (data.status) ? "fa-check" : "fa-exclamation";
-        
+
         // Select the correct toggle
         var el = $("[data-repo='" + repoName + "'] .hook-status");
         el.addClass(status);
@@ -58,46 +58,48 @@ $(document).ready(function() {
           el.removeClass(status);
           el.css('opacity', 1);
         });
-        
+
       }
     });
-    
+
   });
-  
-  
+
+
   // Select DOM elements
   var githubButtonEl = $("button[name='connect-to-github']");
   githubButtonEl.on("click", function() {
     window.location = "/github/connect";
   });
-  
+
   var syncButton = $("span[name='sync-repos']");
   syncButton.on("click", function() {
-    
+
     $.ajax({
       url: "/github/sync",
       type: "GET",
       dataType: "json",
       success: function(data, textStatus, jqXHR) {
-        
+
         // TODO: Update DOM
-        
+
       }
     });
-    
+
   });
-  
+
 });
 </script>
 {% endblock %}
 
-{% block body %}
-<div class="row" id="file_container">
-    <div class="col-sm-12 col-md-12">
-      {% if connected %}
-      
-      <h3><i class="fa fa-github"></i> GitHub Repositories <span name="sync-repos" class="extra-small">(updated {{last_sync}})</span></h3>
-      
+{% block settings_body %}
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-heading"><i class="fa fa-github"></i> <strong>GitHub</strong></div>
+    <div class="panel-body">
+       {% if connected %}
+
+      <h3> GitHub Repositories <span name="sync-repos" class="extra-small">(updated {{last_sync}})</span></h3>
+
       <table class="table table-striped">
         <tbody>
         {% for repo, description in repos.iteritems() %}
@@ -118,10 +120,11 @@ $(document).ready(function() {
         {% endfor %}
         </tbody>
       </table>
-      
+
       {% else %}
-      <button name="connect-to-github" type="submit" class="btn btn-default"><i class="fa fa-github fa-lg"></i> Connect to GitHub</button>
+      <button name="connect-to-github" type="submit" class="btn btn-default btn-lg"><i class="fa fa-github fa-lg"></i> Connect to GitHub</button>
       {% endif %}
     </div>
+  </div>
 </div>
 {% endblock %}

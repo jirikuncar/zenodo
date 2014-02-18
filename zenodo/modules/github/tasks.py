@@ -41,7 +41,7 @@ from invenio.modules.webhooks.models import Event
 from invenio.celery import celery
 from zenodo.ext.oauth import oauth
 
-from ..models import OAuthTokens
+from .models import OAuthTokens
 
 
 # TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
