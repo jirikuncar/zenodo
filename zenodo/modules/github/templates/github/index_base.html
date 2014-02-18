@@ -130,7 +130,7 @@ $(document).ready(function() {
               <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-repo-name="{{repo}}">
               <i class="hook-status fa"></i>
               <br/>
-              <small class="text-muted repo-description"> {{description.modified|naturaltime if description.get('modified') else ''}}</small>
+              <small class="text-muted doi-time"> {{description.modified|naturaltime if description.get('modified') else ''}}</small>
             </div>
           </td>
         </tr>
