@@ -21,3 +21,4 @@
 ## or submit itself to any jurisdiction.
 
 ZENODO_API_KEY = ""
+GITHUB_WEBHOOK_ID = "github"
