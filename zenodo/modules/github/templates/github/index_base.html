@@ -87,6 +87,12 @@ $(document).ready(function() {
     
   });
   
+  $("i.error").tooltip({
+    trigger: "hover",
+    animation: true,
+    placement: "top",
+  });
+  
 });
 </script>
 {% endblock %}
@@ -109,7 +115,13 @@ $(document).ready(function() {
           <td>
             <div class="doi-toggle">
               {% if description.errors %}
-              <i class="error fa fa-exclamation-circle">{{description.errors}}</i>
+              <a href="https://zenodo-dev.cern.ch/deposit/{{description.deposition_id}}/">
+                <i
+                  class="error fa fa-exclamation-circle"
+                  data-toggle="tooltip"
+                  title="{{description.errors | map(attribute='message') | join(',' )}}"
+                ></i>
+              </a>
               {% endif %}
               <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-repo-name="{{repo}}">
               <i class="hook-status fa"></i>

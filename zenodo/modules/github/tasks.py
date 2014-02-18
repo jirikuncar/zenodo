@@ -203,7 +203,8 @@ def publish_deposition(api_key, payload, user, errors, deposition_id, user_email
         if r.status_code == 202:
             user.extra_data["repos"][repository_name]["doi"] = r.json()["doi"]
             user.extra_data["repos"][repository_name]["modified"] = r.json()["modified"]
-            del user.extra_data["repos"][repository_name]["errors"]
+            user.extra_data["repos"][repository_name].pop("errors", None)
+            user.extra_data["repos"][repository_name].pop("deposition_id", None)
             user.extra_data.update()
         
             db.session.commit()
@@ -218,6 +219,7 @@ def publish_deposition(api_key, payload, user, errors, deposition_id, user_email
         )
 
     # Add to extra_data
+    user.extra_data["repos"][repository_name]["deposition_id"] = deposition_id
     user.extra_data["repos"][repository_name]["errors"] = errors
     user.extra_data.update()
     db.session.commit()
