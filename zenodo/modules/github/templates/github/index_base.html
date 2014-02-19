@@ -87,6 +87,12 @@ $(document).ready(function() {
 
   });
 
+  $("i.error").tooltip({
+    trigger: "hover",
+    animation: true,
+    placement: "top",
+  });
+
 });
 </script>
 {% endblock %}
@@ -105,15 +111,28 @@ $(document).ready(function() {
         {% for repo, description in repos.iteritems() %}
         <tr>
           <td>
-            <h4 class="repo">{{repo}} <small>{{description.DOI}}</small></h4>
+            <h4 class="repo">{{repo}} <small>{{description.doi}}</small></h4>
             <small class="text-muted repo-description"> {{description.description}}</small>
           </td>
           <td>
             <div class="doi-toggle">
+              {% if description.errors %}
+              <a href="deposit/{{description.deposition_id}}/">
+                <i
+                  class="error fa fa-exclamation-circle"
+                  data-toggle="tooltip"
+                  {% if description.errors[0].code %}
+                  title="Missing metadata."
+                  {% else %}
+                  title="{{description.errors | map(attribute='message') | join(',' )}}"
+                  {% endif %}
+                ></i>
+              </a>
+              {% endif %}
               <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-repo-name="{{repo}}">
               <i class="hook-status fa"></i>
               <br/>
-              <small class="text-muted repo-description"> {{description.modified|naturaltime if description.get('modified') else ''}}</small>
+              <small class="text-muted doi-time"> {{description.modified|naturaltime if description.get('modified') else ''}}</small>
             </div>
           </td>
         </tr>

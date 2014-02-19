@@ -46,7 +46,7 @@ from invenio.config import CFG_SITE_ADMIN_EMAIL, CFG_SITE_NAME
 from invenio.ext.template import render_template_to_string
 from invenio.modules.accounts.models import User
 from invenio.modules.oauth2server.models import Token
-from invenio.modules.webhooks.models import CeleryReceiver
+from invenio.modules.webhooks.models import Receiver, CeleryReceiver
 from zenodo.ext.oauth import oauth
 
 from ..models import OAuthTokens
@@ -65,7 +65,7 @@ blueprint = Blueprint(
 
 @blueprint.before_app_first_request
 def register_webhook():
-    CeleryReceiver.register(
+    Receiver.register(
         current_app.config.get('GITHUB_WEBHOOK_ID'),
         CeleryReceiver(create_deposition)
     )
@@ -128,7 +128,7 @@ def index():
             auth=(remote.consumer_key, remote.consumer_secret)
         )
 
-        if r.status_code is 200:
+        if r.status_code == 200:
             # The user is authenticated and the token we have is still valid. Render GitHub settings page.
             extra_data = user.extra_data
 
@@ -233,7 +233,7 @@ def remove_github_hook():
         "repos/%(full_name)s/hooks/%(hook_id)s" % {"full_name": repo, "hook_id": hook_id},
     )
 
-    if resp.status is 204:
+    if resp.status == 204:
         # The hook has successfully been removed by GitHub, update the status and DB
         status["status"] = True
 
@@ -270,9 +270,9 @@ def create_github_hook():
         format='json',
         data=data
     )
-
-
-    if resp.status is 201:
+    
+    
+    if resp.status == 201:
         # Hook was created, updated the status and database
         status["status"] = True
 
@@ -297,7 +297,10 @@ def sync_repositories():
 
     return redirect( url_for('.index') )
 
-
+def create_deposition_error():
+    """docstring for create_deposition_error"""
+    pass
+    
 @remote.tokengetter
 def get_oauth_token():
     return session.get('github_token')
