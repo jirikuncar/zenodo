@@ -17,7 +17,8 @@
 ## 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 #}
 
-{% extends "accounts/settings.html" %}
+{%- import "accounts/settings/helpers.html" as helpers with context %}
+{%- extends "accounts/settings/index.html" %}
 
 {% block title %}{% endblock %}
 
@@ -68,7 +69,7 @@ $(document).ready(function() {
   // Select DOM elements
   var githubButtonEl = $("button[name='connect-to-github']");
   githubButtonEl.on("click", function() {
-    window.location = "/github/connect";
+    window.location = "{{url_for('zenodo_github.connect')}}";
   });
 
   var syncButton = $("span[name='sync-repos']");
@@ -98,52 +99,75 @@ $(document).ready(function() {
 {% endblock %}
 
 {% block settings_body %}
-<div class="panel-group">
-  <div class="panel panel-default">
-    <div class="panel-heading"><i class="fa fa-github"></i> <strong>GitHub</strong></div>
-    <div class="panel-body">
-       {% if connected %}
-
-      <h3> GitHub Repositories <span name="sync-repos" class="extra-small">(updated {{last_sync}})</span></h3>
-
-      <table class="table table-striped">
-        <tbody>
-        {% for repo, description in repos.iteritems() %}
-        <tr>
-          <td>
-            <h4 class="repo">{{repo}} <small>{{description.doi}}</small></h4>
-            <small class="text-muted repo-description"> {{description.description}}</small>
-          </td>
-          <td>
-            <div class="doi-toggle">
-              {% if description.errors %}
-              <a href="deposit/{{description.deposition_id}}/">
-                <i
-                  class="error fa fa-exclamation-circle"
-                  data-toggle="tooltip"
-                  {% if description.errors[0].code %}
-                  title="Missing metadata."
-                  {% else %}
-                  title="{{description.errors | map(attribute='message') | join(',' )}}"
-                  {% endif %}
-                ></i>
-              </a>
-              {% endif %}
-              <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-repo-name="{{repo}}">
-              <i class="hook-status fa"></i>
-              <br/>
-              <small class="text-muted doi-time"> {{description.modified|naturaltime if description.get('modified') else ''}}</small>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-
-      {% else %}
-      <button name="connect-to-github" type="submit" class="btn btn-default btn-lg"><i class="fa fa-github fa-lg"></i> Connect to GitHub</button>
-      {% endif %}
+{% if connected %}
+{{helpers.panel_start(
+    _('%(icon)s GitHub Repositories')|format(icon='<i class="fa fa-github"></i>')|safe,
+    with_body=False,
+    btn='Sync ...',
+    btn_icon='fa fa-refresh',
+    btn_name='sync-repos',
+    btn_text=_('(updated %(last_sync)s) ')|format(last_sync=last_sync),
+)}}
+<div class="panel-body">
+<h4>Get started</h4>
+<div class="row">
+    <div class="col-md-4">
+    <h1><strong>1</strong></h1> Flip the switch
     </div>
-  </div>
+    <div class="col-md-4">
+    2 Release
+    </div>
+    <div class="col-md-4">
+    3 Get the badge
+    </div>
 </div>
+</div>
+<table class="table table-striped">
+  <tbody>
+  {% for repo, description in repos.iteritems() %}
+  <tr>
+    <td>
+      <h4 class="repo">{{repo}} <small>{{description.doi}}</small></h4>
+      <small class="text-muted repo-description"> {{description.description}}</small>
+    </td>
+    <td>
+      <div class="doi-toggle">
+        {% if description.errors %}
+        <a href="deposit/{{description.deposition_id}}/">
+          <i
+            class="error fa fa-exclamation-circle"
+            data-toggle="tooltip"
+            {% if description.errors[0].code %}
+            title="Missing metadata."
+            {% else %}
+            title="{{description.errors | map(attribute='message') | join(',' )}}"
+            {% endif %}
+          ></i>
+        </a>
+        {% endif %}
+        <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-repo-name="{{repo}}">
+        <i class="hook-status fa"></i>
+        <br/>
+        <small class="text-muted doi-time"> {{description.modified|naturaltime if description.get('modified') else ''}}</small>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{helpers.panel_end(with_body=False)}}
+{% else %}
+{{helpers.panel_start(
+    _('%(icon)s GitHub')|format(icon='<i class="fa fa-github"></i>')|safe,
+)}}
+<div class="row" align="center">
+    <h1>Software preservation made simple!</h1>
+    <div style="margin: 50px;">
+        <button name="connect-to-github" type="submit" class="btn btn-default btn-lg"><i class="fa fa-github fa-lg"></i> Connect</button>
+    </div>
+    <p class="text-muted">
+    To get started, click "Connect" and we will get a list your repositories from GitHub.</p>
+</div>
+{{helpers.panel_end()}}
+{% endif %}
 {% endblock %}

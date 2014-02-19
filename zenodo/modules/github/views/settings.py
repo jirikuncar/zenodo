@@ -50,8 +50,9 @@ blueprint = Blueprint(
 @login_required
 @register_menu(
     blueprint, 'settings.github',
-    _('<i class="fa fa-github fa-fw"></i> GitHub')
+    _('<i class="fa fa-github fa-fw"></i> GitHub'),
+    order=10,
 )
-@register_breadcrumb(blueprint, '.index', _('GitHub'))
+@register_breadcrumb(blueprint, 'breadcrumbs.settings.github', _('GitHub'))
 def index():
     return render_template("github/index.html")

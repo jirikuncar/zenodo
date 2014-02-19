@@ -23,6 +23,15 @@
 
 """
 GitHub blueprint for Zenodo
+
+
+1) Go to GitHub and create a new application
+   *) Set Authorization callback URL to http://localhost:4000/account/settings/github/connected
+   *) Add the keys to configuration
+        ZENODO_GITHUB_CLIENT_ID = ""
+        ZENODO_GITHUB_CLIENT_SECRET = ""
+
+
 """
 
 from __future__ import absolute_import
@@ -86,10 +95,10 @@ def naturaltime(val):
     return humanize.naturaltime(now - val)
 
 
-def get_repositories(user):
+def get_repositories(user, github_login=None):
     """Helper method to get a list of current user's repositories from GitHub."""
     r = remote.get("users/%(username)s/repos?type=owner&sort=full_name" %
-                   {"username": session["github_login"]})
+                   {"username": github_login or session["github_login"]})
 
     repo_data = r.data
 
@@ -221,9 +230,13 @@ def connected(resp):
         github_name = resp.data['name']
 
         # Create a Zenodo personal access token
-        zenodo_token = Token.create_personal('github', current_user_id)
+        zenodo_token = Token.create_personal(
+            'github',
+            current_user_id,
+            scopes=['webhooks:event']
+        )
 
-        extra_data = get_repositories(user)
+        extra_data = get_repositories(user, github_login=github_login)
         extra_data.update({
             "login": github_login,
             "name": github_name,
