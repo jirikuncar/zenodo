@@ -238,7 +238,6 @@ def publish_deposition(api_key, payload, user, errors, deposition_id, user_email
     
     return False
 
-
 # TODO: Send requests checking SSL certificate (zenodo-dev certificate expired!)
 # TODO: Ensure duplicate releases are not created.
 def create_deposition(event_state):

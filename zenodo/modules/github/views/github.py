@@ -43,9 +43,14 @@ import dateutil
 from dateutil.parser import parse
 from datetime import datetime, timedelta
 
+import numpy as np
+from PIL import Image
+from PIL import ImageFont
+from PIL import ImageDraw 
+
 import humanize
 import requests
-from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify, current_app
+from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify, current_app, make_response
 from flask.ext.login import current_user
 
 from invenio.ext.sqlalchemy import db
@@ -56,6 +61,7 @@ from invenio.ext.template import render_template_to_string
 from invenio.modules.accounts.models import User
 from invenio.modules.oauth2server.models import Token
 from invenio.modules.webhooks.models import Receiver, CeleryReceiver
+from invenio.modules.pidstore.models import PersistentIdentifier
 from zenodo.ext.oauth import oauth
 from flask.ext.login import login_required
 from invenio.ext.sslify import ssl_required
@@ -82,10 +88,6 @@ def register_webhook():
         current_app.config.get('GITHUB_WEBHOOK_ID'),
         CeleryReceiver(create_deposition)
     )
-
-
-# TODO: Place this module behind a Zenodo authorized URL
-
 
 @blueprint.app_template_filter('naturaltime')
 def naturaltime(val):
@@ -188,17 +190,11 @@ def index():
 
     return render_template("github/index.html", **context)
 
-# Authenticated endpoint
-
-
 @blueprint.route('/connect')
 def connect():
     return remote.authorize(
         callback=url_for('.connected', _external=True)
     )
-
-# Authenticated endpoint
-
 
 @blueprint.route('/connected')
 @remote.authorized_handler
@@ -261,8 +257,63 @@ def connected(resp):
 
     return redirect(url_for('.index'))
 
-# TODO: Authenticated endpoint
-
+@blueprint.route('/badge', methods=["GET"])
+def get_badge():    
+    doi = request.args.get('doi')
+    # TODO: Uncomment below to prevent unneeded DOI badges
+    
+    # if not PersistentIdentifier.get('doi', doi):
+    #     doi = "ZENODO"
+    
+    # Check if the badge already exists
+    badge_path = os.path.join(blueprint.static_folder, "badges", "%s.png" % doi.replace("/", "-"))
+    if os.path.isfile(badge_path):
+        resp = make_response(open(badge_path, 'r').read())
+        resp.content_type = "image/png"
+        return resp
+    
+    font = ImageFont.truetype(
+        os.path.join(blueprint.static_folder, "badges", "Trebuchet MS.ttf"),
+        11
+    )
+    badge_template = os.path.join(blueprint.static_folder, "badges", "template.png")
+    arr = np.asarray(
+        Image.open(badge_template)
+    )
+    
+    # Get left vertical strip for the DOI label
+    label_strip = arr[:, 2]
+    value_strip = arr[:, 3]
+    
+    # Splice into array
+    label_width = 28
+    value_width = 6 + font.getsize(doi)[0]
+    
+    # TODO: Use numpy repeat
+    for i in xrange(label_width):
+        arr = np.insert(arr, 3, label_strip, 1)
+    for i in xrange(value_width):
+        arr = np.insert(arr, label_width + 4, value_strip, 1)
+    
+    im = Image.fromarray(arr)
+    draw = ImageDraw.Draw(im)
+    draw.text(
+        (6, 4),
+        "DOI",
+        (255, 255, 255),
+        font=font
+    )
+    draw.text(
+        (label_width + 8, 4),
+        doi,
+        (255, 255, 255),
+        font=font
+    )
+    im.save(badge_path)
+    
+    resp = make_response(open(badge_path, 'r').read())
+    resp.content_type = "image/png"
+    return resp
 
 @blueprint.route('/remove-github-hook', methods=["POST"])
 def remove_github_hook():
@@ -290,9 +341,6 @@ def remove_github_hook():
 
     return json.dumps(status)
 
-# TODO: Authenticated endpoint
-
-
 @blueprint.route('/create-github-hook', methods=["POST"])
 def create_github_hook():
     status = {"status": False}
@@ -303,8 +351,6 @@ def create_github_hook():
     github_login = user.extra_data["login"]
     zenodo_token_id = Token.query.filter_by(
         id=user.extra_data["zenodo_token_id"]).first().access_token
-
-    # TODO: Use Zenodo endpoint instead of Ultrahook!!!
 
     data = {
         "name": "web",
@@ -332,13 +378,8 @@ def create_github_hook():
 
     return json.dumps(status)
 
-# TODO: Authenticated endpoint
-
-
 @blueprint.route('/sync', methods=["GET"])
 def sync_repositories():
-    
-    
     
     # Query for our current repo data
     user = OAuthTokens.query.filter_by(user_id=current_user.get_id()).filter_by(
