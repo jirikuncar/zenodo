@@ -337,7 +337,9 @@ def create_github_hook():
 
 @blueprint.route('/sync', methods=["GET"])
 def sync_repositories():
-
+    
+    
+    
     # Query for our current repo data
     user = OAuthTokens.query.filter_by(user_id=current_user.get_id()).filter_by(
         client_id=remote.consumer_key).first()
@@ -349,11 +351,6 @@ def sync_repositories():
     db.session.commit()
 
     return redirect(url_for('.index'))
-
-
-def create_deposition_error():
-    """docstring for create_deposition_error"""
-    pass
 
 
 @remote.tokengetter

@@ -34,8 +34,6 @@ $(document).ready(function() {
     var state = data.value;
     var repoName = data.el[0].dataset.repoName;
 
-    console.log("HERE", repoName);
-
     // Post to Zenodo
     var endpoint = state ? "create-github-hook/" : "remove-github-hook/"
     console.log("POSTING to ", endpoint);
@@ -72,11 +70,11 @@ $(document).ready(function() {
     window.location = "{{url_for('zenodo_github.connect')}}";
   });
 
-  var syncButton = $("span[name='sync-repos']");
+  var syncButton = $("button[name='sync-repos']");
   syncButton.on("click", function() {
 
     $.ajax({
-      url: "/github/sync",
+      url: "/account/settings/github/sync",
       type: "GET",
       dataType: "json",
       success: function(data, textStatus, jqXHR) {
