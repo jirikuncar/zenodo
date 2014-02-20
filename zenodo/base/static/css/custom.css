@@ -905,3 +905,7 @@ div.repo-info {
 .badge-modal h3 {
   margin-top: 0;
 }
+
+span.get-badge {
+  cursor: pointer;
+}
