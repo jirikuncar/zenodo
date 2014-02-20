@@ -43,14 +43,9 @@ import dateutil
 from dateutil.parser import parse
 from datetime import datetime, timedelta
 
-import numpy as np
-from PIL import Image
-from PIL import ImageFont
-from PIL import ImageDraw 
-
 import humanize
 import requests
-from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify, current_app, make_response
+from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify, current_app
 from flask.ext.login import current_user
 
 from invenio.ext.sqlalchemy import db
@@ -61,7 +56,6 @@ from invenio.ext.template import render_template_to_string
 from invenio.modules.accounts.models import User
 from invenio.modules.oauth2server.models import Token
 from invenio.modules.webhooks.models import Receiver, CeleryReceiver
-from invenio.modules.pidstore.models import PersistentIdentifier
 from zenodo.ext.oauth import oauth
 from flask.ext.login import login_required
 from invenio.ext.sslify import ssl_required
@@ -185,6 +179,7 @@ def index():
             context["connected"] = True
             context["repos"] = extra_data['repos']
             context["name"] = extra_data['login']
+            context["user_id"] = user.user_id
             context["last_sync"] = humanize.naturaltime(
                 datetime.now() - last_sync)
 
@@ -256,64 +251,6 @@ def connected(resp):
     db.session.commit()
 
     return redirect(url_for('.index'))
-
-@blueprint.route('/badge', methods=["GET"])
-def get_badge():    
-    doi = request.args.get('doi')
-    # TODO: Uncomment below to prevent unneeded DOI badges
-    
-    # if not PersistentIdentifier.get('doi', doi):
-    #     doi = "ZENODO"
-    
-    # Check if the badge already exists
-    badge_path = os.path.join(blueprint.static_folder, "badges", "%s.png" % doi.replace("/", "-"))
-    if os.path.isfile(badge_path):
-        resp = make_response(open(badge_path, 'r').read())
-        resp.content_type = "image/png"
-        return resp
-    
-    font = ImageFont.truetype(
-        os.path.join(blueprint.static_folder, "badges", "Trebuchet MS.ttf"),
-        11
-    )
-    badge_template = os.path.join(blueprint.static_folder, "badges", "template.png")
-    arr = np.asarray(
-        Image.open(badge_template)
-    )
-    
-    # Get left vertical strip for the DOI label
-    label_strip = arr[:, 2]
-    value_strip = arr[:, 3]
-    
-    # Splice into array
-    label_width = 28
-    value_width = 6 + font.getsize(doi)[0]
-    
-    # TODO: Use numpy repeat
-    for i in xrange(label_width):
-        arr = np.insert(arr, 3, label_strip, 1)
-    for i in xrange(value_width):
-        arr = np.insert(arr, label_width + 4, value_strip, 1)
-    
-    im = Image.fromarray(arr)
-    draw = ImageDraw.Draw(im)
-    draw.text(
-        (6, 4),
-        "DOI",
-        (255, 255, 255),
-        font=font
-    )
-    draw.text(
-        (label_width + 8, 4),
-        doi,
-        (255, 255, 255),
-        font=font
-    )
-    im.save(badge_path)
-    
-    resp = make_response(open(badge_path, 'r').read())
-    resp.content_type = "image/png"
-    return resp
 
 @blueprint.route('/remove-github-hook', methods=["POST"])
 def remove_github_hook():

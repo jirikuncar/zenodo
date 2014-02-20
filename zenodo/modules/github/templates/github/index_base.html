@@ -138,19 +138,20 @@ $(document).ready(function() {
       
       {% if description.doi %}
       <div class="repo-info collapse {{ repo | replace('/', '-') }}">
-        <p>Add Zenodo's DOI badge to your repository!</p>
+        
+        <img src="/badge/{{user_id}}/{{repo | replace('/', '%2F')}}" />
 
         <h5><small>Markdown</small></h5>
-        <pre>[![DOI](http://akapadia.s3.amazonaws.com/zenodo/badge/{{ description.doi | replace('/', '-') }}.png)](http://dx.doi.org/{{description.doi}})</pre>
+        <pre>[![DOI](http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }})](http://dx.doi.org/{{description.doi}})</pre>
 
         <h5><small>RST</small></h5>
-        <pre>.. image:: http://akapadia.s3.amazonaws.com/zenodo/badge/{{ description.doi | replace('/', '-') }}.png   :target: http://dx.doi.org/{{description.doi}}</pre>
+        <pre>.. image:: http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}   :target: http://dx.doi.org/{{description.doi}}</pre>
 
         <h5><small>Image URL</small></h5>
-        <pre>http://akapadia.s3.amazonaws.com/zenodo/badge/{{ description.doi | replace('/', '-') }}.png</pre>
+        <pre>http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}</pre>
 
         <h5><small>HTML</small></h5>
-        <pre>&lt;a href="http://dx.doi.org/{{description.doi}}"&gt;&lt;img src="http://akapadia.s3.amazonaws.com/zenodo/badge/{{ description.doi | replace('/', '-') }}.png"&gt;</a></pre>
+        <pre>&lt;a href="http://dx.doi.org/{{description.doi}}"&gt;&lt;img src="http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}"&gt;&lt;a&gt;</pre>
         <hr>
       </div>
       {% endif %}
