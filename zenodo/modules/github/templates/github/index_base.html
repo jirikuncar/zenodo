@@ -139,20 +139,33 @@ $(document).ready(function() {
       {% if description.doi %}
       <div class="repo-info collapse {{ repo | replace('/', '-') }}">
         
-        <img src="/badge/{{user_id}}/{{repo | replace('/', '%2F')}}" />
+        <img data-toggle="modal" data-target="[data-modal='{{ repo | replace('/', '-') }}']" src="/badge/{{user_id}}/{{repo | replace('/', '%2F')}}" />
+        
+        <div class="modal fade badge-modal" data-modal='{{ repo | replace("/", "-") }}'>
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-body">
+                <h4>DOI Badges</h4>
+                
+                <h4><small>Markdown</small><h4>
+                <pre>[![DOI](http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }})](http://dx.doi.org/{{description.doi}})</pre>
 
-        <h5><small>Markdown</small></h5>
-        <pre>[![DOI](http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }})](http://dx.doi.org/{{description.doi}})</pre>
+                <h4><small>RST</small><h4>
+                <pre>.. image:: http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}   :target: http://dx.doi.org/{{description.doi}}</pre>
+              
+                <h4><small>Image URL</small><h4>
+                <pre>http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}</pre>
 
-        <h5><small>RST</small></h5>
-        <pre>.. image:: http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}   :target: http://dx.doi.org/{{description.doi}}</pre>
-
-        <h5><small>Image URL</small></h5>
-        <pre>http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}</pre>
-
-        <h5><small>HTML</small></h5>
-        <pre>&lt;a href="http://dx.doi.org/{{description.doi}}"&gt;&lt;img src="http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}"&gt;&lt;a&gt;</pre>
-        <hr>
+                <h4><small>HTML</small><h4>
+                <pre>&lt;a href="http://dx.doi.org/{{description.doi}}"&gt;&lt;img src="http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}"&gt;&lt;a&gt;</pre>
+              
+              </div>
+              
+            </div>
+            
+          </div>
+          
+        </div>
       </div>
       {% endif %}
 

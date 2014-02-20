@@ -901,3 +901,7 @@ i.fa-ellipsis-h {
 div.repo-info {
   padding-top: 20px;
 }
+
+.badge-modal h3 {
+  margin-top: 0;
+}
