@@ -891,3 +891,13 @@ i.hook-status.fa-exclamation {
 i.error {
   color: red;
 }
+
+i.fa-ellipsis-h {
+  cursor: pointer;
+  padding-left: 4px;
+  vertical-align: bottom;
+}
+
+div.repo-info {
+  padding-top: 20px;
+}
