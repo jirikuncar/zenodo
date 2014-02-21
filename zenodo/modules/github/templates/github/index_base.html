@@ -109,22 +109,33 @@ $(document).ready(function() {
     btn_text=_('(updated %(last_sync)s) ')|format(last_sync=last_sync),
 )}}
 <div class="panel-body">
-<h4>Get started</h4>
+<h1 align="center"><i class="fa fa-github"></i> Get started</h1>
 <div class="row">
     <div class="col-md-4">
-    <h1><strong>1</strong></h1> Flip the switch
+    <h2><strong>1</strong> <small>Flip the switch</small></h2>
+    <hr>
+    Select the repository you want to preserve, and toggle
+    the switch below to turn on automatic preservation of your software.
     </div>
     <div class="col-md-4">
-    2 Release
+    <h2><strong>2</strong> <small>Create a release</small></h2>
+    <hr>
+    Go to GitHub and <a href="https://help.github.com/articles/creating-releases">create a release</a>. {{config.CFG_SITE_NAME}} will automatically download a .zip package of all new releases and register
+    a DOIs for them.
     </div>
     <div class="col-md-4">
-    3 Get the badge
+    <h2><strong>3</strong> <small>Get the badge</small></h2>
+    <hr>
+    After your first release, you can get a DOI badge to include in your GitHub
+    README file.
     </div>
 </div>
+<p></p>
+<p class="text-muted text-center"><small>More question? Check out the <a href="{{url_for('zenodo_base.faq')}}">FAQ</a>.</small></p>
 </div>
 <table class="table table-striped">
   <tbody>
-  {% for repo, description in repos.iteritems() %}
+  {%- for repo, description in repos|dictsort %}
   <tr>
     <td>
       <h4 class="repo">{{repo}} <small>{{description.doi}}</small></h4>

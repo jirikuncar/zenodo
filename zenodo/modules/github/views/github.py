@@ -136,7 +136,7 @@ def get_repositories(user, github_login=None):
     _('<i class="fa fa-github fa-fw"></i> GitHub'),
     order=10,
 )
-@register_breadcrumb(blueprint, '.index', _('GitHub'))
+@register_breadcrumb(blueprint, 'breadcrumbs.settings.github', _('GitHub'))
 def index():
     context = {"connected": False}
 
