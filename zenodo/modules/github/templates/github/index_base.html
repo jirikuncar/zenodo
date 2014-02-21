@@ -18,6 +18,8 @@
 #}
 
 {%- import "accounts/settings/helpers.html" as helpers with context %}
+
+{% if not request.is_xhr %}
 {%- extends "accounts/settings/index.html" %}
 
 {% block title %}{% endblock %}
@@ -33,8 +35,6 @@ $(document).ready(function() {
   doiSwitches.on("switchChange", function(e, data) {
     var state = data.value;
     var repoName = data.el[0].dataset.repoName;
-
-    console.log("HERE", repoName);
 
     // Post to Zenodo
     var endpoint = state ? "create-github-hook/" : "remove-github-hook/"
@@ -72,17 +72,16 @@ $(document).ready(function() {
     window.location = "{{url_for('zenodo_github.connect')}}";
   });
 
-  var syncButton = $("span[name='sync-repos']");
+  var syncButton = $("button[name='sync-repos']");
   syncButton.on("click", function() {
 
     $.ajax({
-      url: "/github/sync",
+      url: "/account/settings/github/sync",
       type: "GET",
-      dataType: "json",
+      // dataType: "json",
       success: function(data, textStatus, jqXHR) {
-
         // TODO: Update DOM
-
+        console.log(data);
       }
     });
 
@@ -93,10 +92,15 @@ $(document).ready(function() {
     animation: true,
     placement: "top",
   });
+  
+  $('[data-toggle="tooltip"]').tooltip()
 
 });
 </script>
 {% endblock %}
+
+{% endif %}
+
 
 {% block settings_body %}
 {% if connected %}
@@ -137,9 +141,57 @@ $(document).ready(function() {
   <tbody>
   {%- for repo, description in repos|dictsort %}
   <tr>
+    
     <td>
-      <h4 class="repo">{{repo}} <small>{{description.doi}}</small></h4>
-      <small class="text-muted repo-description"> {{description.description}}</small>
+      
+      <div class="repo-container">
+        <h4 class="repo">{{repo}}
+          {% if description.doi %}
+          
+          <span class="get-badge" data-toggle="tooltip" data-placement="bottom" title="Get a DOI badge!">
+            <img data-toggle="modal" data-target="[data-modal='{{ repo | replace('/', '-') }}']" src="/badge/{{user_id}}/{{repo | replace('/', '%2F')}}" />
+          </span>
+          
+          <div class="modal fade badge-modal" data-modal='{{ repo | replace("/", "-") }}'>
+            <div class="modal-dialog">
+              <div class="modal-content">
+                <div class="modal-body">
+                  <h4>DOI Badges</h4>
+                
+                  <h4><small>Markdown</small><h4>
+                  <pre>[![DOI](http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }})](http://dx.doi.org/{{description.doi}})</pre>
+
+                  <h4><small>RST</small><h4>
+                  <pre>.. image:: http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}   :target: http://dx.doi.org/{{description.doi}}</pre>
+              
+                  <h4><small>Image URL</small><h4>
+                  <pre>http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}</pre>
+
+                  <h4><small>HTML</small><h4>
+                  <pre>&lt;a href="http://dx.doi.org/{{description.doi}}"&gt;&lt;img src="http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}"&gt;&lt;a&gt;</pre>
+              
+                </div>
+              
+              </div>
+            
+            </div>
+          
+          </div>
+          {% endif %}
+        </h4>
+        <small class="text-muted repo-description"> {{description.description}}</small>
+        
+        {% if description.doi %}
+        <i class="fa fa-ellipsis-h text-muted" data-toggle="collapse" data-target=".{{ repo | replace('/', '-') }}"></i>
+        {% endif %}
+      </div>
+      
+      {% if description.doi %}
+      <div class="repo-info collapse {{ repo | replace('/', '-') }}">
+      </div>
+      {% endif %}
+
+      </div>
     </td>
     <td>
       <div class="doi-toggle">
@@ -159,6 +211,7 @@ $(document).ready(function() {
         <input type="checkbox" {{ 'checked' if description.hook }} data-size="mini" data-animate="true" data-repo-name="{{repo}}">
         <i class="hook-status fa"></i>
         <br/>
+        <!-- <a target="_blank" href="https://github.com/{{repo}}/releases/new"><button type="button" class="btn btn-default btn-xs">New Release</button> -->
         <small class="text-muted doi-time"> {{description.modified|naturaltime if description.get('modified') else ''}}</small>
       </div>
     </td>

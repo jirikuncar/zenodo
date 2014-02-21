@@ -83,10 +83,6 @@ def register_webhook():
         CeleryReceiver(create_deposition)
     )
 
-
-# TODO: Place this module behind a Zenodo authorized URL
-
-
 @blueprint.app_template_filter('naturaltime')
 def naturaltime(val):
     val = parse(val)
@@ -183,22 +179,17 @@ def index():
             context["connected"] = True
             context["repos"] = extra_data['repos']
             context["name"] = extra_data['login']
+            context["user_id"] = user.user_id
             context["last_sync"] = humanize.naturaltime(
                 datetime.now() - last_sync)
 
     return render_template("github/index.html", **context)
-
-# Authenticated endpoint
-
 
 @blueprint.route('/connect')
 def connect():
     return remote.authorize(
         callback=url_for('.connected', _external=True)
     )
-
-# Authenticated endpoint
-
 
 @blueprint.route('/connected')
 @remote.authorized_handler
@@ -261,9 +252,6 @@ def connected(resp):
 
     return redirect(url_for('.index'))
 
-# TODO: Authenticated endpoint
-
-
 @blueprint.route('/remove-github-hook', methods=["POST"])
 def remove_github_hook():
     status = {"status": False}
@@ -290,9 +278,6 @@ def remove_github_hook():
 
     return json.dumps(status)
 
-# TODO: Authenticated endpoint
-
-
 @blueprint.route('/create-github-hook', methods=["POST"])
 def create_github_hook():
     status = {"status": False}
@@ -303,8 +288,6 @@ def create_github_hook():
     github_login = user.extra_data["login"]
     zenodo_token_id = Token.query.filter_by(
         id=user.extra_data["zenodo_token_id"]).first().access_token
-
-    # TODO: Use Zenodo endpoint instead of Ultrahook!!!
 
     data = {
         "name": "web",
@@ -332,28 +315,31 @@ def create_github_hook():
 
     return json.dumps(status)
 
-# TODO: Authenticated endpoint
-
-
 @blueprint.route('/sync', methods=["GET"])
 def sync_repositories():
-
-    # Query for our current repo data
     user = OAuthTokens.query.filter_by(user_id=current_user.get_id()).filter_by(
         client_id=remote.consumer_key).first()
-    if user is None:
-        return json.dumps({"state": "error syncing"})
 
     repos = get_repositories(user)
     user.extra_data.update(repos)
     db.session.commit()
+    
+    # Check the date of the last repo sync
+    last_sync = datetime.strptime(
+        user.extra_data["repos_last_sync"],
+        "%Y-%m-%d %H:%M:%S.%f"
+    )
+    
+    context = {}
+    context["connected"] = True
+    context["repos"] = user.extra_data['repos']
+    context["name"] = user.extra_data['login']
+    context["user_id"] = user.user_id
+    context["last_sync"] = humanize.naturaltime(
+        datetime.now() - last_sync
+    )
 
-    return redirect(url_for('.index'))
-
-
-def create_deposition_error():
-    """docstring for create_deposition_error"""
-    pass
+    return render_template("github/index.html", **context)
 
 
 @remote.tokengetter

@@ -892,6 +892,20 @@ i.error {
   color: red;
 }
 
-small.doi-time {
-  padding-right: 15px;
+i.fa-ellipsis-h {
+  cursor: pointer;
+  padding-left: 4px;
+  vertical-align: bottom;
+}
+
+div.repo-info {
+  padding-top: 20px;
+}
+
+.badge-modal h3 {
+  margin-top: 0;
+}
+
+span.get-badge {
+  cursor: pointer;
 }
