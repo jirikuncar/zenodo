@@ -92,7 +92,7 @@ $(document).ready(function() {
     animation: true,
     placement: "top",
   });
-  
+
   $('[data-toggle="tooltip"]').tooltip()
 
 });
@@ -105,12 +105,13 @@ $(document).ready(function() {
 {% block settings_body %}
 {% if connected %}
 {{helpers.panel_start(
-    _('%(icon)s GitHub Repositories')|format(icon='<i class="fa fa-github"></i>')|safe,
+    _('GitHub Repositories'),
     with_body=False,
+    icon="fa fa-github",
     btn='Sync ...',
     btn_icon='fa fa-refresh',
     btn_name='sync-repos',
-    btn_text=_('(updated %(last_sync)s) ')|format(last_sync=last_sync),
+    btn_text=_('(updated %(last_sync)s) ', last_sync=last_sync),
 )}}
 <div class="panel-body">
 <h1 align="center"><i class="fa fa-github"></i> Get started</h1>
@@ -141,51 +142,51 @@ $(document).ready(function() {
   <tbody>
   {%- for repo, description in repos|dictsort %}
   <tr>
-    
+
     <td>
-      
+
       <div class="repo-container">
         <h4 class="repo">{{repo}}
           {% if description.doi %}
-          
+
           <span class="get-badge" data-toggle="tooltip" data-placement="bottom" title="Get a DOI badge!">
             <img data-toggle="modal" data-target="[data-modal='{{ repo | replace('/', '-') }}']" src="/badge/{{user_id}}/{{repo | replace('/', '%2F')}}" />
           </span>
-          
+
           <div class="modal fade badge-modal" data-modal='{{ repo | replace("/", "-") }}'>
             <div class="modal-dialog">
               <div class="modal-content">
                 <div class="modal-body">
                   <h4>DOI Badges</h4>
-                
+
                   <h4><small>Markdown</small><h4>
                   <pre>[![DOI](http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }})](http://dx.doi.org/{{description.doi}})</pre>
 
-                  <h4><small>RST</small><h4>
+                  <h4><small>reStructedText</small><h4>
                   <pre>.. image:: http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}   :target: http://dx.doi.org/{{description.doi}}</pre>
-              
+
                   <h4><small>Image URL</small><h4>
                   <pre>http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}</pre>
 
                   <h4><small>HTML</small><h4>
                   <pre>&lt;a href="http://dx.doi.org/{{description.doi}}"&gt;&lt;img src="http://zenodo.org/badge/{{user_id}}/{{repo | replace('/', '%2F') }}"&gt;&lt;a&gt;</pre>
-              
+
                 </div>
-              
+
               </div>
-            
+
             </div>
-          
+
           </div>
           {% endif %}
         </h4>
         <small class="text-muted repo-description"> {{description.description}}</small>
-        
+
         {% if description.doi %}
         <i class="fa fa-ellipsis-h text-muted" data-toggle="collapse" data-target=".{{ repo | replace('/', '-') }}"></i>
         {% endif %}
       </div>
-      
+
       {% if description.doi %}
       <div class="repo-info collapse {{ repo | replace('/', '-') }}">
       </div>
