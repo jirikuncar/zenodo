@@ -38,6 +38,9 @@ point specified in the setup.py::
     },
 """
 
+import os
+import sys
+
 # Define identity function for string extraction
 _ = lambda x: x
 
@@ -102,6 +105,11 @@ DEBUG_TB_ENABLED = True
 DEBUG_TB_INTERCEPT_REDIRECTS = False
 CFG_EMAIL_BACKEND = "flask.ext.email.backends.console.Mail"
 
+APACHE_CERTIFICATE_FILE = os.path.join(sys.prefix, 'etc/certs/localhost.crt')
+APACHE_CERTIFICATE_KEYFILE = os.path.join(
+    sys.prefix, 'etc/certs/localhost.key'
+)
+
 # Default database name
 CFG_DATABASE_NAME = "zenodo"
 CFG_DATABASE_USER = "zenodo"
@@ -113,7 +121,7 @@ CFG_SITE_NAME_INTL = dict(
 )
 CFG_SITE_LANGS = ["en"]
 CFG_SITE_TAG = "LOCAL"
-CFG_SITE_EMERGENCY_EMAIL_ADDRESSES = {'*': '{{CFG_INVENIO_ADMIN}}'}
+CFG_SITE_EMERGENCY_EMAIL_ADDRESSES = {'*': 'team@zenodo.org'}
 
 CFG_SITE_ADMIN_EMAIL = "admin@zenodo.org"
 CFG_SITE_SUPPORT_EMAIL = "info@zenodo.org"
@@ -124,8 +132,6 @@ CFG_GOOGLE_SITE_VERIFICATION = [
 ]
 CFG_DROPBOX_API_KEY = "72dpqrjvx71mqyu"
 CFG_BIBFORMAT_ADD_THIS_ID = "ra-4dc80cde118f4dad"
-#CFG_PIWIK_URL = "piwik.web.cern.ch/piwik/"
-#CFG_PIWIK_SITE_ID = "57"
 
 CFG_WEBDEPOSIT_MAX_UPLOAD_SIZE = 2147483648
 CFG_OPENAIRE_FILESIZE_NOTIFICATION = 10485760
